@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { MediaModule } from './media/media.module.js';
+import { MessagingModule } from './messaging/messaging.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -14,6 +16,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       appSecret: 'YOUR_APP_SECRET',
       serviceId: 'ingestion',
     }),
+    MediaModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

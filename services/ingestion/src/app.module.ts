@@ -1,25 +1,43 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-import { MediaModule } from './media/media.module.js';
-import { MessagingModule } from './messaging/messaging.module.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
+import configuration from './config/configuration';
+import { MediaModule } from './media/media.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'ingestion',
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: ['../../.env'], // el .env vive en la raíz del monorepo
     }),
-    MediaModule,
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
+        const database = config.getOrThrow<{
+          host: string;
+          port: number;
+          username?: string;
+          password?: string;
+          database?: string;
+        }>('database');
+
+        return {
+          type: 'postgres',
+          host: database.host,
+          port: database.port,
+          username: database.username,
+          password: database.password,
+          database: database.database,
+          autoLoadEntities: true,
+          // ⚠️ SOLO desarrollo. En producción usaremos migraciones.
+          synchronize: true,
+        };
+      },
+    }),
     MessagingModule,
+    MediaModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

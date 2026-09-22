@@ -1,34 +1,31 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { MediaService } from './media.service.js';
-import { CreateMediaDto } from './dto/create-media.dto.js';
-import { UpdateMediaDto } from './dto/update-media.dto.js';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
+import { ConfirmUploadDto } from './dto/confirm-upload.dto';
+import { CreateUploadDto } from './dto/create-upload.dto';
+import { MediaService } from './media.service';
 
 @Controller('media')
 export class MediaController {
-  constructor(private readonly mediaService: MediaService) {}
+  constructor(private readonly media: MediaService) {}
 
-  @Post()
-  create(@Body() createMediaDto: CreateMediaDto) {
-    return this.mediaService.create(createMediaDto);
+  @Post('uploads')
+  create(@Body() dto: CreateUploadDto) {
+    return this.media.createUpload(dto);
   }
 
-  @Get()
-  findAll() {
-    return this.mediaService.findAll();
+  @Post('uploads/confirm')
+  confirm(@Body() dto: ConfirmUploadDto) {
+    return this.media.confirmUpload(dto.mediaId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.mediaService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateMediaDto: UpdateMediaDto) {
-    return this.mediaService.update(+id, updateMediaDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.mediaService.remove(+id);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.media.findOne(id);
   }
 }

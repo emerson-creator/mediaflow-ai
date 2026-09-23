@@ -83,6 +83,34 @@ services:
       mc mb --ignore-existing local/${MINIO_BUCKET} &&
       echo 'Bucket listo: ${MINIO_BUCKET}'
       "
+  worker:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    container_name: mediaflow-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_HOST: rabbitmq # nombre del servicio en la red de Docker
+      MINIO_HOST: minio
+      MINIO_API_PORT: 9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    restart: unless-stopped
 
 volumes:
   postgres_data:

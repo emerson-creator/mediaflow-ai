@@ -1,5 +1,15 @@
-# Build artifacts
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
 *.tsbuildinfo
+
+# Environment variables — NEVER commit these
+.env
+.env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -7,6 +17,20 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
-# Test / junk files
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Junk / test files
 corrupt.mp4

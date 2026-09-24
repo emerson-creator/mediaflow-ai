@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket Test</title>
+  </head>
+  <body>
+    <h1>Escuchando eventos...</h1>
+    <pre id="log"></pre>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+      const socket = io("http://localhost:3002");
+      const log = document.getElementById("log");
+
+      socket.on("connect", () => {
+        log.textContent += `Conectado: ${socket.id}\n`;
+      });
+
+      socket.on("media.progress.updated", (payload) => {
+        log.textContent += `${JSON.stringify(payload)}\n`;
+      });
+
+      socket.on("disconnect", () => {
+        log.textContent += "Desconectado\n";
+      });
+    </script>
+  </body>
+</html>

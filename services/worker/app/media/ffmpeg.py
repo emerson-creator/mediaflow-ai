@@ -8,6 +8,16 @@ class FFmpegError(Exception):
     pass
 
 
+def _format_ffmpeg_error(returncode: int, stderr: str) -> str:
+    if "Invalid data found when processing input" in stderr:
+        return "The uploaded file is corrupted or uses an unsupported media format."
+
+    if "No such file or directory" in stderr:
+        return "The uploaded media file could not be found."
+
+    return f"FFmpeg could not process the uploaded file (exit code {returncode})."
+
+
 async def extract_audio(input_path: str, output_path: str) -> None:
     """
     Extract audio to mono 16kHz WAV format (optimal for Whisper).
@@ -36,6 +46,6 @@ async def extract_audio(input_path: str, output_path: str) -> None:
     if process.returncode != 0:
         error_msg = stderr.decode(errors="replace")
         logger.error(f"FFmpeg failed: {error_msg}")
-        raise FFmpegError(f"FFmpeg exit code {process.returncode}: {error_msg[-500:]}")
+        raise FFmpegError(_format_ffmpeg_error(process.returncode, error_msg))
 
     logger.info(f"Audio extracted: {output_path}")

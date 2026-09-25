@@ -19,13 +19,13 @@ export class MediaService {
     private readonly rabbit: RabbitMQService,
   ) {}
 
-  async createUpload(dto: CreateUploadDto) {
+  async createUpload(dto: CreateUploadDto, userId: string) {
     // Sanitizamos el nombre para evitar path traversal en el objectKey
     const safeName = dto.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
 
     const media = await this.repo.save(
       this.repo.create({
-        userId: dto.userId,
+        userId,
         filename: safeName,
         mimeType: dto.mimeType,
         sizeBytes: String(dto.sizeBytes),
@@ -33,7 +33,7 @@ export class MediaService {
       }),
     );
 
-    media.objectKey = `uploads/${dto.userId}/${media.id}/${safeName}`;
+    media.objectKey = `uploads/${userId}/${media.id}/${safeName}`;
     await this.repo.save(media);
 
     const uploadUrl = await this.storage.createUploadUrl(

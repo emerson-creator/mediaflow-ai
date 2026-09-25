@@ -20,10 +20,6 @@ const ALLOWED_MIME = [
 ];
 
 export class CreateUploadDto {
-  // TEMPORAL: en la Fase 4 esto vendrá del JWT, no del body
-  @IsUUID()
-  userId: string;
-
   @IsString()
   @IsNotEmpty()
   filename: string;

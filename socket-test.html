@@ -1,26 +1,57 @@
 <!doctype html>
 <html>
   <head>
-    <title>Socket Test</title>
+    <meta charset="UTF-8" />
+    <title>MediaFlow WebSocket Test</title>
   </head>
   <body>
-    <h1>Escuchando eventos...</h1>
-    <pre id="log"></pre>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <h1>WebSocket Test</h1>
+
+    <input
+      id="token"
+      type="text"
+      placeholder="Paste access token here"
+      style="width: 500px"
+    />
+
+    <button id="connect">Connect</button>
+
+    <pre id="output"></pre>
+
+    <script src="http://localhost:3002/socket.io/socket.io.js"></script>
+
     <script>
-      const socket = io("http://localhost:3002");
-      const log = document.getElementById("log");
+      const output = document.getElementById("output");
 
-      socket.on("connect", () => {
-        log.textContent += `Conectado: ${socket.id}\n`;
-      });
+      function log(message) {
+        output.textContent += message + "\n";
+        console.log(message);
+      }
 
-      socket.on("media.progress.updated", (payload) => {
-        log.textContent += `${JSON.stringify(payload)}\n`;
-      });
+      document.getElementById("connect").addEventListener("click", () => {
+        const token = document.getElementById("token").value.trim();
 
-      socket.on("disconnect", () => {
-        log.textContent += "Desconectado\n";
+        const socket = io("http://localhost:3002", {
+          auth: {
+            token,
+          },
+        });
+
+        socket.on("connect", () => {
+          log(`Connected! Socket ID: ${socket.id}`);
+        });
+
+        socket.on("disconnect", () => {
+          log("Disconnected");
+        });
+
+        socket.on("connect_error", (error) => {
+          log(`Connection error: ${error.message}`);
+        });
+
+        socket.on("media.progress.updated", (payload) => {
+          log(`PROGRESS EVENT: ${JSON.stringify(payload, null, 2)}`);
+        });
       });
     </script>
   </body>

@@ -1,5 +1,8 @@
 export default () => ({
   port: parseInt(process.env.NOTIFICATION_PORT ?? '3002', 10),
+  jwt: {
+    secret: process.env.JWT_SECRET,
+  },
   rabbitmq: {
     url: `amqp://${process.env.RABBITMQ_USER}:${process.env.RABBITMQ_PASSWORD}@${
       process.env.RABBITMQ_HOST ?? 'localhost'

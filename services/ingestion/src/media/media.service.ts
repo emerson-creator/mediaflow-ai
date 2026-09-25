@@ -74,9 +74,16 @@ export class MediaService {
     return { mediaId: media.id, status: media.status };
   }
 
-  async findOne(id: string) {
-    const media = await this.repo.findOneBy({ id });
-    if (!media) throw new NotFoundException('Media no encontrada');
+  async findAllForUser(userId: string) {
+    return this.repo.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findOneForUser(id: string, userId: string) {
+    const media = await this.repo.findOneBy({ id, userId });
+    if (!media) throw new NotFoundException('Media not found for this user');
     return media;
   }
 }

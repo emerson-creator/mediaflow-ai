@@ -31,8 +31,18 @@ export class MediaController {
     return this.media.confirmUpload(dto.mediaId);
   }
 
+  @Get()
+  findAll(@Headers('x-user-id') userId?: string) {
+    if (!userId) throw new BadRequestException('Missing user context');
+    return this.media.findAllForUser(userId);
+  }
+
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.media.findOne(id);
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    if (!userId) throw new BadRequestException('Missing user context');
+    return this.media.findOneForUser(id, userId);
   }
 }

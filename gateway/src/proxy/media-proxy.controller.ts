@@ -1,4 +1,4 @@
-import { All, Controller, Param, Req, Res, UseGuards } from '@nestjs/common';
+import { All, Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
@@ -17,8 +17,13 @@ export class MediaProxyController {
     this.ingestionUrl = config.getOrThrow('ingestionUrl');
   }
 
+  @Get()
+  proxyRoot(@Req() req: Request, @Res() res: Response) {
+    return this.proxy(req, res);
+  }
+
   // Catches GET/POST on /media and any subpath, e.g. /media/uploads, /media/:id
-  @All('*')
+  @All('{*path}')
   async proxy(@Req() req: Request, @Res() res: Response) {
     const userId = (req.user as { userId: string }).userId;
     const targetUrl = `${this.ingestionUrl}${req.originalUrl}`;

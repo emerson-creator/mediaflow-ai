@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Placeholder: NestJS services don't expose /metrics yet.
+  # We'll add the prom-client library and a /metrics endpoint
+  # to each service as a follow-up — flagging it now so it's
+  # not forgotten, not blocking this phase.
+  # - job_name: 'gateway'
+  #   static_configs:
+  #     - targets: ['gateway:3000']

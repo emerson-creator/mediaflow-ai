@@ -1,10 +1,12 @@
 import axios from "axios";
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  // In dev: VITE_API_URL = http://localhost:3000 (Gateway direct, no prefix)
+  // In prod (built by Docker): VITE_API_URL = "" and baseURL becomes "/api",
+  // which Nginx routes to the Gateway.
+  baseURL: import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : "/api",
 });
 
-// Attach the JWT to every outgoing request, if present.
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
   if (token) {
@@ -13,8 +15,6 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// If the token is invalid/expired, the Gateway returns 401.
-// Clear the stale session and redirect to login.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {

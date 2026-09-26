@@ -11,7 +11,7 @@ export function useSocket(onProgress: (event: ProgressEvent) => void) {
   useEffect(() => {
     if (!accessToken) return;
 
-    const socket = io(import.meta.env.VITE_WS_URL, {
+    const socket = io(import.meta.env.VITE_WS_URL || undefined, {
       auth: { token: accessToken },
     });
     socketRef.current = socket;

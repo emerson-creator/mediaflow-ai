@@ -1,6 +1,7 @@
 name: mediaflow-dev
 
 services:
+  # ---------------- Infrastructure ----------------
   postgres:
     image: postgres:16-alpine
     container_name: mediaflow-postgres
@@ -55,22 +56,18 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:5173
     ports:
       - "${MINIO_API_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f http://localhost:9000/minio/health/live || exit 1",
-        ]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  # Crea el bucket automáticamente al arrancar
   minio-init:
     image: quay.io/minio/mc:latest
     container_name: mediaflow-minio-init
@@ -81,8 +78,90 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
       mc mb --ignore-existing local/${MINIO_BUCKET} &&
-      echo 'Bucket listo: ${MINIO_BUCKET}'
+      echo 'Bucket ready: ${MINIO_BUCKET}'
       "
+
+  # ---------------- Application services (hot-reload) ----------------
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile.dev
+    container_name: mediaflow-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GATEWAY_PORT: 3000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      INGESTION_URL: http://ingestion:3001
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./gateway/src:/app/src
+    command: npm run start:dev
+
+  ingestion:
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile.dev
+    container_name: mediaflow-ingestion
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      INGESTION_PORT: 3001
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MINIO_HOST: minio
+      MINIO_API_PORT: 9000
+      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./services/ingestion/src:/app/src
+    command: npm run start:dev
+
+  notification:
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile.dev
+    container_name: mediaflow-notification
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      NOTIFICATION_PORT: 3002
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./services/notification/src:/app/src
+    command: npm run start:dev
+
   worker:
     build:
       context: ./services/worker
@@ -96,9 +175,9 @@ services:
       minio:
         condition: service_healthy
     environment:
+      RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      RABBITMQ_HOST: rabbitmq # nombre del servicio en la red de Docker
       MINIO_HOST: minio
       MINIO_API_PORT: 9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -110,7 +189,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-    restart: unless-stopped
+    volumes:
+      - ./services/worker/app:/app/app
+    # Python doesn't need a build step, so a bind mount alone gives
+    # hot-reload as long as you restart the process on change —
+    # for now, `docker compose restart worker` after edits is enough;
+    # a proper watch/reload setup isn't worth the complexity yet.
 
 volumes:
   postgres_data:

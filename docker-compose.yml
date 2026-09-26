@@ -1,0 +1,273 @@
+name: mediaflow-ai
+
+services:
+  # ---------------- Infrastructure ----------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: mediaflow-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    container_name: mediaflow-redis
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [internal]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: mediaflow-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+    networks: [internal]
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: mediaflow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Needed so presigned URLs are signed with the public domain,
+      # not the internal Docker hostname. Browsers upload directly here.
+      MINIO_API_CORS_ALLOW_ORIGIN: https://${DOMAIN}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [internal]
+    # MinIO's API needs to be reachable from the internet too, since the
+    # browser uploads directly to it via presigned URL (bypassing Nginx's
+    # proxy paths). We expose it through Nginx as well — see nginx conf below,
+    # this section gets a dedicated server block on a subdomain.
+    expose:
+      - "9000"
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    container_name: mediaflow-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/${MINIO_BUCKET} &&
+      echo 'Bucket ready: ${MINIO_BUCKET}'
+      "
+    networks: [internal]
+
+  # ---------------- Application services ----------------
+  gateway:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/mediaflow-gateway:latest
+    container_name: mediaflow-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GATEWAY_PORT: 3000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      INGESTION_URL: http://ingestion:3001
+    restart: unless-stopped
+    networks: [internal]
+
+  ingestion:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/mediaflow-ingestion:latest
+    container_name: mediaflow-ingestion
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      INGESTION_PORT: 3001
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MINIO_HOST: minio
+      MINIO_API_PORT: 9000
+      # Signs presigned URLs with the public domain the browser can reach.
+      MINIO_PUBLIC_URL: https://storage.${DOMAIN}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    restart: unless-stopped
+    networks: [internal]
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/mediaflow-worker:latest
+    container_name: mediaflow-worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MINIO_HOST: minio
+      MINIO_API_PORT: 9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    restart: unless-stopped
+    networks: [internal]
+    # FFmpeg can spike CPU briefly; cap it so one heavy job doesn't
+    # starve the rest of the stack on a small VPS.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536M
+
+  notification:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/mediaflow-notification:latest
+    container_name: mediaflow-notification
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      NOTIFICATION_PORT: 3002
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      CORS_ORIGINS: https://${DOMAIN}
+    restart: unless-stopped
+    networks: [internal]
+
+  # ---------------- Frontend (static build) ----------------
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/mediaflow-frontend:latest
+    container_name: mediaflow-frontend
+    # This container's build output is copied into the shared volume
+    # once, then it exits. Nginx serves the volume directly — no
+    # frontend server process runs continuously.
+    entrypoint:
+      ["sh", "-c", "cp -r /dist/. /shared/ && echo 'Frontend files copied'"]
+    volumes:
+      - frontend_dist:/shared
+    networks: [internal]
+
+  # ---------------- Edge ----------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mediaflow-nginx
+    depends_on:
+      - gateway
+      - notification
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - frontend_dist:/usr/share/nginx/html:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    restart: unless-stopped
+    networks: [internal]
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: mediaflow-certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    # Renews twice a day (a no-op unless the cert is close to expiry);
+    # this container just loops and exits, it doesn't stay resident serving anything.
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done"
+    networks: [internal]
+
+  # ---------------- Observability ----------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mediaflow-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    networks: [internal]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mediaflow-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # Serves Grafana under a subpath through our own Nginx instead of its own port
+      GF_SERVER_ROOT_URL: https://${DOMAIN}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  frontend_dist:
+  certbot_certs:
+  certbot_www:
+  prometheus_data:
+  grafana_data:

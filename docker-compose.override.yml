@@ -1,0 +1,39 @@
+services:
+  gateway:
+    image: !reset null
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+
+  ingestion:
+    image: !reset null
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile
+    environment:
+      MINIO_PUBLIC_URL: http://storage.localhost
+
+  worker:
+    image: !reset null
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+
+  notification:
+    image: !reset null
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile
+
+  frontend:
+    image: !reset null
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+        VITE_WS_URL: ""
+
+  minio:
+    environment:
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost

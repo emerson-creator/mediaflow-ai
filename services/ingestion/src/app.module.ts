@@ -4,9 +4,12 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import configuration from './config/configuration';
 import { MediaModule } from './media/media.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { HealthModule } from './health/health.module';
+import { LoggingModule } from './logging/logging.module';
 
 @Module({
   imports: [
+    LoggingModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
@@ -38,6 +41,7 @@ import { MessagingModule } from './messaging/messaging.module';
     }),
     MessagingModule,
     MediaModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

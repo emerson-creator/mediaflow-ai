@@ -6,6 +6,8 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { HealthIndicatorResult } from '@nestjs/terminus';
+import { HeadBucketCommand } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class StorageService {
@@ -64,5 +66,16 @@ export class StorageService {
 
   get bucketName() {
     return this.bucket;
+  }
+
+  async healthCheck(): Promise<HealthIndicatorResult> {
+    try {
+      await this.internalClient.send(
+        new HeadBucketCommand({ Bucket: this.bucket }),
+      );
+      return { minio: { status: 'up' } };
+    } catch {
+      return { minio: { status: 'down' } };
+    }
   }
 }

@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqp-connection-manager';
 import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel } from 'amqplib';
+import { HealthIndicatorResult } from '@nestjs/terminus';
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
@@ -51,5 +52,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     await this.channel?.close();
     await this.connection?.close();
+  }
+
+  healthCheck(): HealthIndicatorResult {
+    // amqp-connection-manager exposes isConnected() on the connection object
+    const isConnected = this.connection?.isConnected() ?? false;
+    if (!isConnected) {
+      return { rabbitmq: { status: 'down' } };
+    }
+    return { rabbitmq: { status: 'up' } };
   }
 }

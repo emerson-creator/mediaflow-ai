@@ -1,8 +1,7 @@
 FROM python:3.12-slim
 
-# ffmpeg viene de los repos de Debian
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -12,8 +11,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
-# Usuario no-root por seguridad
 RUN useradd --create-home worker && chown -R worker:worker /app
 USER worker
+
+# Fails if the heartbeat file is older than 60s (worker stuck/dead)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD find /tmp/worker_heartbeat -mmin -1 | grep -q . || exit 1
 
 CMD ["python", "-m", "app.main"]

@@ -22,7 +22,9 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
     bucket = event["bucket"]
     object_key = event["objectKey"]
 
-    logger.info(f"Starting pipeline for media {media_id}")
+    log_ctx = {"mediaId": media_id, "eventId": event.get("eventId"), "userId": user_id}
+
+    logger.info("Pipeline started", extra=log_ctx)
 
     await update_media_status(media_id, "PROCESSING")
 
@@ -34,18 +36,22 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
         try:
             # 1. Download from MinIO
             await publisher.publish_progress(media_id, user_id, "DOWNLOADING", 10)
+            logger.info("Downloading media from storage", extra=log_ctx)
             await download_object(bucket, object_key, str(input_path))
 
             # 2. Extract audio
             await publisher.publish_progress(media_id, user_id, "EXTRACTING_AUDIO", 30)
+            logger.info("Extracting audio from media", extra=log_ctx)
             await extract_audio(str(input_path), str(audio_path))
 
             # 3. Transcription
             await publisher.publish_progress(media_id, user_id, "TRANSCRIBING", 50)
+            logger.info("Transcribing audio", extra=log_ctx)
             transcript = await transcribe_audio(str(audio_path))
 
             # 4. Summarize + Keywords
             await publisher.publish_progress(media_id, user_id, "SUMMARIZING", 80)
+            logger.info("Summarizing transcription", extra=log_ctx)
             result = await summarize_transcript(transcript)
 
             # 5. Persistir resultados
@@ -54,7 +60,7 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
             )
 
             await publisher.publish_progress(media_id, user_id, "DONE", 100)
-            logger.info(f"Pipeline completed for media {media_id}")
+            logger.info("Pipeline completed", extra=log_ctx)
 
         except Exception as exc:
             logger.exception(f"Pipeline failed for media {media_id}")

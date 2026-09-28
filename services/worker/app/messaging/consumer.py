@@ -3,6 +3,7 @@ import logging
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
+from app.health import write_heartbeat
 
 from app.config import settings
 from app.messaging.publisher import ProgressPublisher
@@ -15,6 +16,7 @@ async def handle_message(message: AbstractIncomingMessage, publisher: ProgressPu
     # ack manual: solo confirmamos si el pipeline completa sin excepción
     async with message.process(requeue=False, ignore_processed=True):
         try:
+            write_heartbeat()
             event = json.loads(message.body)
             logger.info(f"Message received: {event.get('mediaId')}")
             await process_media(event, publisher)
@@ -40,4 +42,5 @@ async def start_consumer() -> None:
     publisher = ProgressPublisher(exchange)
 
     logger.info(f"Listening to queue '{settings.upload_queue}'...")
+    write_heartbeat()
     await queue.consume(lambda msg: handle_message(msg, publisher))

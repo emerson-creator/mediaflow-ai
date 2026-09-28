@@ -139,6 +139,12 @@ services:
     volumes:
       - ./services/ingestion/src:/app/src
     command: npm run start:dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   notification:
     build:

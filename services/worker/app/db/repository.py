@@ -20,21 +20,27 @@ async def save_transcription_result(
 ) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO transcriptions (media_id, transcript, summary, keywords)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (media_id) DO UPDATE
-                SET transcript = EXCLUDED.transcript,
-                    summary = EXCLUDED.summary,
-                    keywords = EXCLUDED.keywords
-            """,
-            media_id,
-            transcript,
-            summary,
-            keywords,
-        )
-        await conn.execute(
-            "UPDATE media SET status = 'DONE', \"updatedAt\" = now() WHERE id = $1",
-            media_id,
+        # Both statements succeed together or neither does.
+        async with conn.transaction():
+            await conn.execute(
+                """
+                INSERT INTO transcriptions (media_id, transcript, summary, keywords)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (media_id) DO UPDATE
+                    SET transcript = EXCLUDED.transcript,
+                        summary = EXCLUDED.summary,
+                        keywords = EXCLUDED.keywords
+                """,
+                media_id, transcript, summary, keywords,
+            )
+            await conn.execute(
+                "UPDATE media SET status = 'DONE', \"updatedAt\" = now() WHERE id = $1",
+                media_id,
+            )
+
+async def get_media_status(media_id: str) -> str | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT status FROM media WHERE id = $1", media_id
         )

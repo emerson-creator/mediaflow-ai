@@ -1,22 +1,24 @@
+import json
 import logging
 
 from openai import AsyncOpenAI
 
 from app.config import settings
+from app.errors import RetryableError
 
 logger = logging.getLogger(__name__)
 
-_client = AsyncOpenAI(api_key=settings.openai_api_key)
+_client = AsyncOpenAI(api_key=settings.openai_api_key, max_retries=0)
 
 SYSTEM_PROMPT = (
-    "You are an assistant that summarizes audio/video transcriptions. "
-    "Always return valid JSON in this exact shape: "
-    '{"summary": "summary in 2-4 sentences", "keywords": ["word1", "word2"]}'
+    "You summarize audio/video transcripts. "
+    "ALWAYS return valid JSON with exactly this shape: "
+    '{"summary": "2-4 sentence summary", "keywords": ["word1", "word2"]}'
 )
 
 
-class SummarizationError(Exception):
-    pass
+class SummarizationError(RetryableError):
+    """Model returned malformed output. A fresh call often fixes it."""
 
 
 async def summarize_transcript(transcript: str) -> dict:
@@ -30,13 +32,12 @@ async def summarize_transcript(transcript: str) -> dict:
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": transcript[:15000]},  # context margin
+            {"role": "user", "content": transcript[:15000]},
         ],
         temperature=0.3,
     )
 
-    import json
     try:
         return json.loads(response.choices[0].message.content)
     except json.JSONDecodeError as e:
-        raise SummarizationError(f"Response was not valid JSON: {e}")
+        raise SummarizationError(f"Model response was not valid JSON: {e}") from e

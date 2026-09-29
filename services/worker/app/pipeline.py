@@ -5,15 +5,13 @@ from pathlib import Path
 from app.ai.summarization import summarize_transcript
 from app.ai.transcription import transcribe_audio
 from app.db.repository import save_transcription_result, update_media_status
+from app.errors import PermanentError, PipelineError, RetryableError
 from app.media.ffmpeg import extract_audio
 from app.messaging.publisher import ProgressPublisher
+from app.retry import with_retry
 from app.storage.minio_client import download_object
 
 logger = logging.getLogger(__name__)
-
-
-class PipelineError(Exception):
-    pass
 
 
 async def process_media(event: dict, publisher: ProgressPublisher) -> None:
@@ -21,11 +19,14 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
     user_id = event["userId"]
     bucket = event["bucket"]
     object_key = event["objectKey"]
-
-    log_ctx = {"mediaId": media_id, "eventId": event.get("eventId"), "userId": user_id}
+    log_ctx = {
+        "mediaId": media_id,
+        "eventId": event.get("eventId"),
+        "userId": user_id,
+        "attempt": event.get("attempt", 1),
+    }
 
     logger.info("Pipeline started", extra=log_ctx)
-
     await update_media_status(media_id, "PROCESSING")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -34,27 +35,27 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
         audio_path = tmp_path / "audio.wav"
 
         try:
-            # 1. Download from MinIO
             await publisher.publish_progress(media_id, user_id, "DOWNLOADING", 10)
-            logger.info("Downloading media from storage", extra=log_ctx)
-            await download_object(bucket, object_key, str(input_path))
+            await with_retry(
+                lambda: download_object(bucket, object_key, str(input_path)),
+                name="download", log_ctx=log_ctx,
+            )
 
-            # 2. Extract audio
             await publisher.publish_progress(media_id, user_id, "EXTRACTING_AUDIO", 30)
-            logger.info("Extracting audio from media", extra=log_ctx)
-            await extract_audio(str(input_path), str(audio_path))
+            await extract_audio(str(input_path), str(audio_path))  # PermanentError on failure
 
-            # 3. Transcription
             await publisher.publish_progress(media_id, user_id, "TRANSCRIBING", 50)
-            logger.info("Transcribing audio", extra=log_ctx)
-            transcript = await transcribe_audio(str(audio_path))
+            transcript = await with_retry(
+                lambda: transcribe_audio(str(audio_path)),
+                name="whisper", log_ctx=log_ctx,
+            )
 
-            # 4. Summarize + Keywords
             await publisher.publish_progress(media_id, user_id, "SUMMARIZING", 80)
-            logger.info("Summarizing transcription", extra=log_ctx)
-            result = await summarize_transcript(transcript)
+            result = await with_retry(
+                lambda: summarize_transcript(transcript),
+                name="summarize", log_ctx=log_ctx,
+            )
 
-            # 5. Persistir resultados
             await save_transcription_result(
                 media_id, transcript, result["summary"], result["keywords"]
             )
@@ -62,10 +63,21 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
             await publisher.publish_progress(media_id, user_id, "DONE", 100)
             logger.info("Pipeline completed", extra=log_ctx)
 
-        except Exception as exc:
-            logger.exception(f"Pipeline failed for media {media_id}")
+        except PermanentError as exc:
+            # Will never succeed. Mark FAILED now, tell the user, let the consumer send to DLQ.
+            logger.error("Permanent failure", extra={**log_ctx, "error": str(exc)})
             await update_media_status(media_id, "FAILED")
-            await publisher.publish_progress(
-                media_id, user_id, "FAILED", 0, message=str(exc)
-            )
-            raise PipelineError(str(exc)) from exc
+            await publisher.publish_progress(media_id, user_id, "FAILED", 0, message=str(exc))
+            raise
+
+        except RetryableError as exc:
+            # Might work later. Do NOT mark FAILED or notify the user as failed yet:
+            # the consumer decides between retry queue and DLQ based on attempt count.
+            logger.warning("Retryable failure", extra={**log_ctx, "error": str(exc)})
+            raise
+
+        except Exception as exc:
+            # Unclassified: be conservative and treat as retryable. A bug in our own
+            # code shouldn't permanently kill a user's file on the first occurrence.
+            logger.exception("Unclassified failure, treating as retryable", extra=log_ctx)
+            raise RetryableError(str(exc)) from exc

@@ -4,15 +4,18 @@ import os
 from openai import AsyncOpenAI
 
 from app.config import settings
+from app.errors import PermanentError
 
 logger = logging.getLogger(__name__)
 
-_client = AsyncOpenAI(api_key=settings.openai_api_key)
+_client = AsyncOpenAI(api_key=settings.openai_api_key, max_retries=0)
+# max_retries=0: the SDK has its own built-in retry, but we want ONE place
+# that owns retry policy (retry.py), so we disable the SDK's and control it ourselves.
 
-MAX_WHISPER_BYTES = 25 * 1024 * 1024  # hard API limit
+MAX_WHISPER_BYTES = 25 * 1024 * 1024
 
 
-class TranscriptionError(Exception):
+class TranscriptionError(PermanentError):
     pass
 
 
@@ -20,11 +23,10 @@ async def transcribe_audio(audio_path: str) -> str:
     size = os.path.getsize(audio_path)
     if size > MAX_WHISPER_BYTES:
         raise TranscriptionError(
-            f"Audio of {size / 1_048_576:.1f}MB exceeds Whisper's 25MB limit. "
-            "Chunking is not implemented yet (we can revisit it if needed)."
+            f"Audio is {size / 1_048_576:.1f}MB, over Whisper's 25MB limit."
         )
 
-    logger.info(f"Transcribing audio ({size / 1_048_576:.1f}MB)")
+    logger.info("Transcribing audio", extra={"size_mb": round(size / 1_048_576, 1)})
 
     with open(audio_path, "rb") as f:
         transcript = await _client.audio.transcriptions.create(
@@ -33,5 +35,4 @@ async def transcribe_audio(audio_path: str) -> str:
             response_format="text",
         )
 
-    # With response_format="text", the SDK returns a plain string directly
     return transcript

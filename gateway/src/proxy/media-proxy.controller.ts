@@ -1,6 +1,15 @@
-import { All, Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  All,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -19,6 +28,14 @@ export class MediaProxyController {
 
   @Get()
   proxyRoot(@Req() req: Request, @Res() res: Response) {
+    return this.proxy(req, res);
+  }
+
+  // Stricter limit specifically for creating uploads: 10 per minute per user.
+  // This route spends real resources (DB row + presigned URL).
+  @Post('uploads')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  proxyUpload(@Req() req: Request, @Res() res: Response) {
     return this.proxy(req, res);
   }
 

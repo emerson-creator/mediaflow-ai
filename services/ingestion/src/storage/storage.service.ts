@@ -4,6 +4,7 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HealthIndicatorResult } from '@nestjs/terminus';
@@ -77,5 +78,11 @@ export class StorageService {
     } catch {
       return { minio: { status: 'down' } };
     }
+  }
+
+  async deleteObject(objectKey: string): Promise<void> {
+    await this.internalClient.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }),
+    );
   }
 }

@@ -12,6 +12,7 @@ export enum MediaStatus {
   PROCESSING = 'PROCESSING',
   DONE = 'DONE',
   FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
 }
 
 @Entity('media')

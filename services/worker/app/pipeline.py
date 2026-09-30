@@ -10,6 +10,8 @@ from app.media.ffmpeg import extract_audio
 from app.messaging.publisher import ProgressPublisher
 from app.retry import with_retry
 from app.storage.minio_client import download_object
+from app.media.ffmpeg import enforce_duration_limit
+from app.media.validation import validate_file_type
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,12 @@ async def process_media(event: dict, publisher: ProgressPublisher) -> None:
                 name="download", log_ctx=log_ctx,
             )
 
+            # Validate the file type before proceeding with further processing
+            validate_file_type(str(input_path))
+
+            duration = await enforce_duration_limit(str(input_path))
+            logger.info("File duration validated", extra={**log_ctx, "duration_seconds": duration})
+            
             await publisher.publish_progress(media_id, user_id, "EXTRACTING_AUDIO", 30)
             await extract_audio(str(input_path), str(audio_path))  # PermanentError on failure
 

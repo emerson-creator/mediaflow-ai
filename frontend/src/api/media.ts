@@ -47,3 +47,10 @@ export async function listMedia(): Promise<MediaItem[]> {
   const { data } = await apiClient.get<MediaItem[]>("/media");
   return data;
 }
+
+export async function createYoutubeUpload(
+  url: string,
+): Promise<{ mediaId: string; status: string }> {
+  const { data } = await apiClient.post("/media/from-youtube", { url });
+  return data;
+}

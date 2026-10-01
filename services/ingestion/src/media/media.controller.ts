@@ -11,6 +11,7 @@ import {
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 import { CreateUploadDto } from './dto/create-upload.dto';
 import { MediaService } from './media.service';
+import { CreateYoutubeUploadDto } from './dto/create-youtube-upload.dto';
 
 @Controller('media')
 export class MediaController {
@@ -44,5 +45,16 @@ export class MediaController {
   ) {
     if (!userId) throw new BadRequestException('Missing user context');
     return this.media.findOneForUser(id, userId);
+  }
+
+  @Post('from-youtube')
+  createYoutubeUpload(
+    @Body() dto: CreateYoutubeUploadDto,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('Missing user context');
+    }
+    return this.media.createYoutubeUpload(dto, userId);
   }
 }

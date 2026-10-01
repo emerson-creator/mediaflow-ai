@@ -9,8 +9,8 @@ import { Repository } from 'typeorm';
 import { RabbitMQService } from '../messaging/rabbitmq.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateUploadDto } from './dto/create-upload.dto';
-import { Media, MediaStatus } from './entities/media.entity';
-
+import { Media, MediaStatus, MediaSourceType } from './entities/media.entity';
+import { CreateYoutubeUploadDto } from './dto/create-youtube-upload.dto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
 
@@ -63,7 +63,7 @@ export class MediaService {
       throw new ConflictException(`Current status: ${media.status}`);
     }
 
-    const head = await this.storage.headObject(media.objectKey);
+    const head = await this.storage.headObject(media.objectKey!);
     if (!head) {
       this.logger.warn(
         { mediaId },
@@ -105,5 +105,38 @@ export class MediaService {
     const media = await this.repo.findOneBy({ id, userId });
     if (!media) throw new NotFoundException('Media not found for this user');
     return media;
+  }
+
+  async createYoutubeUpload(dto: CreateYoutubeUploadDto, userId: string) {
+    const media = await this.repo.save(
+      this.repo.create({
+        userId,
+        sourceType: MediaSourceType.YOUTUBE,
+        sourceUrl: dto.url,
+        filename: dto.url, // placeholder until the Worker fetches the real title
+        status: MediaStatus.QUEUED,
+        objectKey: null,
+        mimeType: null,
+        sizeBytes: null,
+      }),
+    );
+
+    const eventId = randomUUID();
+
+    await this.rabbit.publish('media.youtube_requested', {
+      eventId,
+      mediaId: media.id,
+      userId,
+      sourceUrl: dto.url,
+      attempt: 1,
+      occurredAt: new Date().toISOString(),
+    });
+
+    this.logger.info(
+      { mediaId: media.id, eventId },
+      'media.youtube_requested event published',
+    );
+
+    return { mediaId: media.id, status: media.status };
   }
 }

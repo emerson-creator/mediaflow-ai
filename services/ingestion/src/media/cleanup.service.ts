@@ -43,7 +43,9 @@ export class CleanupService {
         // The upload might have partially succeeded even though confirm()
         // was never called (e.g. the PUT to MinIO finished but the browser
         // crashed before the confirm request). Best-effort delete either way.
-        await this.storage.deleteObject(media.objectKey);
+        if (media.objectKey) {
+          await this.storage.deleteObject(media.objectKey);
+        }
       } catch (err) {
         // Not fatal: the object may simply never have existed. Log and
         // continue — we still want to mark the DB row as expired below.

@@ -28,3 +28,15 @@ Published by: Worker | Consumed by: Notification
 "message": "optional",
 "occurredAt": "ISO-8601"
 }
+
+## media.youtube_requested
+
+Published by: Ingestion | Consumed by: Worker
+{
+"eventId": "uuid",
+"mediaId": "uuid",
+"userId": "uuid",
+"sourceUrl": "https://www.youtube.com/watch?v=...",
+"attempt": 1,
+"occurredAt": "ISO-8601"
+}

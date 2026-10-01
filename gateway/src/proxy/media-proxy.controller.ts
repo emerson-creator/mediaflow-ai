@@ -39,6 +39,12 @@ export class MediaProxyController {
     return this.proxy(req, res);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @All('from-youtube')
+  async createYoutubeUpload(@Req() req: Request, @Res() res: Response) {
+    return this.proxy(req, res);
+  }
+
   // Catches GET/POST on /media and any subpath, e.g. /media/uploads, /media/:id
   @All('{*path}')
   async proxy(@Req() req: Request, @Res() res: Response) {

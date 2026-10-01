@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg curl libmagic1 && \
+    apt-get install -y --no-install-recommends ffmpeg curl libmagic1 ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

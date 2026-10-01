@@ -44,3 +44,18 @@ async def get_media_status(media_id: str) -> str | None:
         return await conn.fetchval(
             "SELECT status FROM media WHERE id = $1", media_id
         )
+
+async def update_media_youtube_metadata(
+    media_id: str, title: str, thumbnail_url: str, object_key: str, mime_type: str, size_bytes: int
+) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE media
+            SET title = $1, "thumbnailUrl" = $2, "objectKey" = $3,
+                "mimeType" = $4, "sizeBytes" = $5, status = 'PROCESSING', "updatedAt" = now()
+            WHERE id = $6
+            """,
+            title, thumbnail_url, object_key, mime_type, size_bytes, media_id,
+        )

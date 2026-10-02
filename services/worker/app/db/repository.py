@@ -1,3 +1,4 @@
+import json
 import logging
 
 from app.db.connection import get_pool
@@ -16,22 +17,22 @@ async def update_media_status(media_id: str, status: str) -> None:
 
 
 async def save_transcription_result(
-    media_id: str, transcript: str, summary: str, keywords: list[str]
+    media_id: str, transcript: str, summary: str, keywords: list[str], segments: list[dict]
 ) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Both statements succeed together or neither does.
         async with conn.transaction():
             await conn.execute(
                 """
-                INSERT INTO transcriptions (media_id, transcript, summary, keywords)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO transcriptions (media_id, transcript, summary, keywords, segments)
+                VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT (media_id) DO UPDATE
                     SET transcript = EXCLUDED.transcript,
                         summary = EXCLUDED.summary,
-                        keywords = EXCLUDED.keywords
+                        keywords = EXCLUDED.keywords,
+                        segments = EXCLUDED.segments
                 """,
-                media_id, transcript, summary, keywords,
+                media_id, transcript, summary, keywords, json.dumps(segments),
             )
             await conn.execute(
                 "UPDATE media SET status = 'DONE', \"updatedAt\" = now() WHERE id = $1",

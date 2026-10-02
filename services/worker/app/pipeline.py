@@ -115,16 +115,20 @@ async def _run_common_pipeline(
         await extract_audio(input_path, audio_path)
 
         await publisher.publish_progress(media_id, user_id, "TRANSCRIBING", 55)
-        transcript = await with_retry(
+        transcript_result = await with_retry(
             lambda: transcribe_audio(audio_path), name="whisper", log_ctx=log_ctx,
         )
+
+        transcript = transcript_result["text"]
+        segments = transcript_result["segments"]
+        
 
         await publisher.publish_progress(media_id, user_id, "SUMMARIZING", 85)
         result = await with_retry(
             lambda: summarize_transcript(transcript), name="summarize", log_ctx=log_ctx,
         )
 
-        await save_transcription_result(media_id, transcript, result["summary"], result["keywords"])
+        await save_transcription_result(media_id, transcript, result["summary"], result["keywords"], segments)
 
         await publisher.publish_progress(media_id, user_id, "DONE", 100)
         logger.info("Pipeline completed", extra=log_ctx)

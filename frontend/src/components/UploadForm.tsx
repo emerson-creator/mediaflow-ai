@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import axios from "axios";
+import { UploadCloud, X } from "lucide-react";
 import * as mediaApi from "../api/media";
 
 interface Props {
@@ -6,131 +8,241 @@ interface Props {
 }
 
 type Mode = "file" | "youtube";
+type Phase = "idle" | "preparing" | "uploading" | "confirming";
 
 const YOUTUBE_URL_PATTERN =
   /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/;
 
+const PHASE_LABELS: Record<Exclude<Phase, "idle">, string> = {
+  preparing: "Preparing upload",
+  uploading: "Uploading",
+  confirming: "Starting pipeline",
+};
+
+const inputClass =
+  "flex-1 rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none disabled:opacity-50";
+
 export function UploadForm({ onUploaded }: Props) {
   const [mode, setMode] = useState<Mode>("file");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [percent, setPercent] = useState(0);
+  const [fileName, setFileName] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+
   const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingUrl, setIsSubmittingUrl] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const isUploading = phase !== "idle";
 
+  async function startUpload(file: File) {
+    if (!/^(audio|video)\//.test(file.type)) {
+      setError("Only audio and video files are supported.");
+      return;
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
     setError(null);
-    setIsSubmitting(true);
+    setFileName(file.name);
+    setPercent(0);
+    setPhase("preparing");
+
     try {
       const { mediaId, uploadUrl } = await mediaApi.createUpload(file);
-      await mediaApi.uploadToStorage(uploadUrl, file);
+      setPhase("uploading");
+      await mediaApi.uploadToStorage(uploadUrl, file, {
+        signal: controller.signal,
+        onProgress: setPercent,
+      });
+      setPhase("confirming");
       await mediaApi.confirmUpload(mediaId);
       onUploaded();
     } catch (err) {
-      console.error(err);
-      setError("Upload failed. Please try again.");
+      if (axios.isCancel(err)) {
+        setError("Upload canceled.");
+      } else {
+        console.error(err);
+        setError("Upload failed. Check your connection and try again.");
+      }
     } finally {
-      setIsSubmitting(false);
+      abortRef.current = null;
+      setPhase("idle");
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) void startUpload(file);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    if (isUploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void startUpload(file);
   }
 
   async function handleYoutubeSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (!YOUTUBE_URL_PATTERN.test(youtubeUrl)) {
-      setError("Enter a valid YouTube URL (youtube.com/watch or youtu.be)");
+      setError("Enter a valid YouTube URL (youtube.com/watch or youtu.be).");
       return;
     }
 
     setError(null);
-    setIsSubmitting(true);
+    setIsSubmittingUrl(true);
     try {
       await mediaApi.createYoutubeUpload(youtubeUrl);
       setYoutubeUrl("");
       onUploaded();
     } catch (err: unknown) {
-      const message = (err as {
-        response?: { data?: { message?: unknown } };
-      }).response?.data?.message;
-      const msg = Array.isArray(message)
-        ? String(message[0])
-        : typeof message === "string"
-          ? message
-          : "Could not process that YouTube URL.";
-      setError(msg);
+      const message = (err as { response?: { data?: { message?: unknown } } })
+        .response?.data?.message;
+      setError(
+        Array.isArray(message)
+          ? String(message[0])
+          : typeof message === "string"
+            ? message
+            : "Could not process that YouTube URL.",
+      );
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingUrl(false);
     }
   }
 
+  const tabClass = (active: boolean) =>
+    `rounded-md px-3 py-1.5 text-sm transition-colors ${
+      active ? "bg-hover text-ink" : "text-ink-dim hover:text-ink"
+    }`;
+
   return (
-    <div className="mb-6">
-      <div className="flex gap-1 mb-3 border border-gray-200 rounded-lg p-1 w-fit bg-gray-50">
+    <div>
+      <div className="mb-3 flex w-fit gap-1 rounded-lg border border-line bg-panel p-1">
         <button
           type="button"
+          aria-pressed={mode === "file"}
           onClick={() => setMode("file")}
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-            mode === "file" ? "bg-white shadow-sm font-medium" : "text-gray-500"
-          }`}
+          className={tabClass(mode === "file")}
         >
           Upload file
         </button>
         <button
           type="button"
+          aria-pressed={mode === "youtube"}
           onClick={() => setMode("youtube")}
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-            mode === "youtube"
-              ? "bg-white shadow-sm font-medium"
-              : "text-gray-500"
-          }`}
+          className={tabClass(mode === "youtube")}
         >
-          YouTube URL
+          YouTube link
         </button>
       </div>
 
       {mode === "file" ? (
-        <label className="inline-block">
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!isUploading) setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`flex min-h-28 flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-center transition-colors focus-within:border-run ${
+            isDragging
+              ? "border-run bg-hover"
+              : "border-line-strong bg-panel hover:bg-hover"
+          } ${isUploading ? "cursor-default" : "cursor-pointer"}`}
+        >
           <input
             ref={fileInputRef}
             type="file"
             accept="audio/*,video/*"
-            disabled={isSubmitting}
+            disabled={isUploading}
             onChange={handleFileChange}
-            className="block text-sm text-gray-600
-              file:mr-4 file:py-2 file:px-4
-              file:rounded-md file:border-0
-              file:bg-blue-600 file:text-white
-              file:cursor-pointer hover:file:bg-blue-700
-              disabled:opacity-50"
+            className="sr-only"
           />
+
+          {isUploading ? (
+            <div className="w-full max-w-md" aria-live="polite">
+              <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate text-left">{fileName}</span>
+                <span className="shrink-0 font-mono text-xs tabular-nums text-ink-dim">
+                  {phase === "uploading" ? `${percent}%` : ""}
+                </span>
+              </div>
+              <div
+                className="h-1 w-full overflow-hidden rounded-full bg-line"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={phase === "uploading" ? percent : undefined}
+              >
+                <div
+                  className="h-full rounded-full bg-run transition-[width] duration-200"
+                  style={{
+                    width: phase === "uploading" ? `${percent}%` : "100%",
+                    opacity: phase === "uploading" ? 1 : 0.4,
+                  }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs text-ink-dim">
+                <span>{PHASE_LABELS[phase as Exclude<Phase, "idle">]}</span>
+                {(phase === "preparing" || phase === "uploading") && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      abortRef.current?.abort();
+                    }}
+                    className="inline-flex items-center gap-1 text-ink-dim hover:text-ink"
+                  >
+                    <X size={12} aria-hidden /> Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <UploadCloud size={20} className="text-ink-faint" aria-hidden />
+              <p className="text-sm">
+                Drop an audio or video file, or{" "}
+                <span className="underline underline-offset-2">browse</span>
+              </p>
+              <p className="text-xs text-ink-faint">
+                It uploads directly to storage, then the pipeline starts.
+              </p>
+            </>
+          )}
         </label>
       ) : (
-        <form onSubmit={handleYoutubeSubmit} className="flex gap-2 max-w-lg">
+        <form onSubmit={handleYoutubeSubmit} className="flex max-w-xl gap-2">
           <input
             type="url"
             placeholder="https://www.youtube.com/watch?v=..."
             value={youtubeUrl}
             onChange={(e) => setYoutubeUrl(e.target.value)}
-            disabled={isSubmitting}
-            className="flex-1 px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            disabled={isSubmittingUrl}
+            className={inputClass}
           />
           <button
             type="submit"
-            disabled={isSubmitting || !youtubeUrl}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+            disabled={isSubmittingUrl || !youtubeUrl}
+            className="whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            {isSubmitting ? "Processing..." : "Process"}
+            {isSubmittingUrl ? "Queuing..." : "Process link"}
           </button>
         </form>
       )}
 
-      {isSubmitting && mode === "file" && (
-        <p className="mt-2 text-sm text-gray-500">Uploading...</p>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-bad">
+          {error}
+        </p>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );
 }

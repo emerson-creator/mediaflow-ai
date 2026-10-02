@@ -4,7 +4,9 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  OneToOne,
 } from 'typeorm';
+import { Transcription } from './transcription.entity';
 
 export enum MediaStatus {
   PENDING_UPLOAD = 'PENDING_UPLOAD',
@@ -63,6 +65,9 @@ export class Media {
   // downloads and uploads the audio to MinIO.
   @Column({ type: 'text', nullable: true })
   objectKey: string | null;
+
+  @OneToOne(() => Transcription, (transcription) => transcription.media)
+  transcription: Transcription;
 
   @Column({
     type: 'enum',

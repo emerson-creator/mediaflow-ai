@@ -7,6 +7,11 @@ import {
   PrimaryColumn,
 } from 'typeorm';
 import { Media } from './media.entity';
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
 
 @Entity('transcriptions')
 export class Transcription {
@@ -30,4 +35,7 @@ export class Transcription {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @Column('jsonb', { default: '[]' })
+  segments: TranscriptSegment[];
 }

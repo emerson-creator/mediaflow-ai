@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  AuthLayout,
+  FormError,
+  fieldInputClass,
+  fieldLabelClass,
+  submitButtonClass,
+} from "../components/AuthLayout";
 import { useAuth } from "../context/useAuth";
 
 export function RegisterPage() {
@@ -30,57 +37,61 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-white p-8 rounded-lg shadow-sm border"
-      >
-        <h1 className="text-2xl font-semibold mb-6">Create account</h1>
+    <AuthLayout
+      title="Create account"
+      subtitle="Upload audio and video, and get transcripts and summaries."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" className="text-ink underline underline-offset-2">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit}>
+        {error && <FormError message={error} />}
 
-        {error && (
-          <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-            {error}
-          </div>
-        )}
-
-        <label className="block mb-1 text-sm font-medium text-gray-700">
+        <label htmlFor="email" className={fieldLabelClass}>
           Email
         </label>
         <input
+          id="email"
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full mb-4 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={isSubmitting}
+          className={`${fieldInputClass} mb-4`}
         />
 
-        <label className="block mb-1 text-sm font-medium text-gray-700">
+        <label htmlFor="password" className={fieldLabelClass}>
           Password
         </label>
         <input
+          id="password"
           type="password"
           required
           minLength={8}
+          autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full mb-6 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={isSubmitting}
+          className={fieldInputClass}
         />
+        <p className="mt-1.5 mb-6 text-xs text-ink-faint">
+          At least 8 characters.
+        </p>
 
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className={submitButtonClass}
         >
-          {isSubmitting ? "Creating account..." : "Register"}
+          {isSubmitting ? "Creating account..." : "Create account"}
         </button>
-
-        <p className="mt-4 text-sm text-center text-gray-600">
-          Already have an account?{" "}
-          <Link to="/login" className="text-blue-600 hover:underline">
-            Sign in
-          </Link>
-        </p>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

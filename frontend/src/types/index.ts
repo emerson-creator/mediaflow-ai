@@ -41,3 +41,39 @@ export interface ProgressEvent {
   message?: string;
   occurredAt: string;
 }
+
+// AÑADE esto a src/types/index.ts (sin tocar lo existente).
+// Los campos salen del JSON real de GET /media/:id/details y del endpoint de playback.
+
+export interface TranscriptSegment {
+  start: number; // segundos
+  end: number; // segundos
+  text: string;
+}
+
+export interface Transcription {
+  transcript: string;
+  summary: string;
+  keywords: string[];
+  segments: TranscriptSegment[];
+  createdAt: string;
+}
+
+// `media` en /details trae más campos que el listado.
+// sizeBytes llega como string porque TypeORM serializa bigint así.
+export interface MediaDetail extends MediaItem {
+  sizeBytes: string | null;
+  updatedAt: string;
+}
+
+export interface MediaDetails {
+  media: MediaDetail;
+  // Asumido null mientras el procesamiento no termina: verifícalo contra el backend.
+  transcription: Transcription | null;
+}
+
+export interface PlaybackInfo {
+  playbackType: string; // hoy solo se ha visto "direct"
+  playbackUrl: string;
+  mimeType: string;
+}

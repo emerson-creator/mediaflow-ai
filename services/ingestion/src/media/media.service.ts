@@ -13,11 +13,17 @@ import { Media, MediaStatus, MediaSourceType } from './entities/media.entity';
 import { CreateYoutubeUploadDto } from './dto/create-youtube-upload.dto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
+import { Transcription } from './entities/transcription.entity';
 
 @Injectable()
 export class MediaService {
   constructor(
-    @InjectRepository(Media) private readonly repo: Repository<Media>,
+    @InjectRepository(Media)
+    private readonly repo: Repository<Media>,
+
+    @InjectRepository(Transcription)
+    private readonly transcriptionRepo: Repository<Transcription>,
+
     private readonly storage: StorageService,
     private readonly rabbit: RabbitMQService,
     @InjectPinoLogger(MediaService.name) private readonly logger: PinoLogger,
@@ -138,5 +144,78 @@ export class MediaService {
     );
 
     return { mediaId: media.id, status: media.status };
+  }
+  async findDetailsForUser(id: string, userId: string) {
+    const media = await this.repo.findOne({
+      where: {
+        id,
+        userId,
+      },
+    });
+
+    if (!media) {
+      throw new NotFoundException('Media not found for this user');
+    }
+
+    const transcription = await this.transcriptionRepo.findOne({
+      where: {
+        mediaId: media.id,
+      },
+    });
+
+    return {
+      media: {
+        id: media.id,
+        filename: media.filename,
+        sourceType: media.sourceType,
+        sourceUrl: media.sourceUrl,
+        title: media.title,
+        thumbnailUrl: media.thumbnailUrl,
+        mimeType: media.mimeType,
+        sizeBytes: media.sizeBytes,
+        status: media.status,
+        createdAt: media.createdAt,
+        updatedAt: media.updatedAt,
+      },
+
+      transcription: transcription
+        ? {
+            transcript: transcription.transcript,
+            summary: transcription.summary,
+            keywords: transcription.keywords,
+            segments: transcription.segments,
+            createdAt: transcription.createdAt,
+          }
+        : null,
+    };
+  }
+  // En media.service.ts, añade:
+
+  async getPlaybackInfo(mediaId: string, userId: string) {
+    const media = await this.repo.findOneBy({ id: mediaId, userId });
+    if (!media) throw new NotFoundException('Media not found');
+
+    if (media.status !== MediaStatus.DONE) {
+      throw new ConflictException('Media is not ready for playback yet');
+    }
+
+    if (media.sourceType === MediaSourceType.YOUTUBE) {
+      return {
+        playbackType: 'youtube' as const,
+        youtubeUrl: media.sourceUrl,
+      };
+    }
+
+    // UPLOAD: generate a short-lived presigned GET URL to MinIO.
+    if (!media.objectKey) {
+      throw new ConflictException('No stored file found for this media');
+    }
+
+    const playbackUrl = await this.storage.createDownloadUrl(media.objectKey);
+    return {
+      playbackType: 'direct' as const,
+      playbackUrl,
+      mimeType: media.mimeType,
+    };
   }
 }

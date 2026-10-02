@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   S3Client,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HealthIndicatorResult } from '@nestjs/terminus';
@@ -84,5 +85,15 @@ export class StorageService {
     await this.internalClient.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }),
     );
+  }
+
+  async createDownloadUrl(objectKey: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: objectKey,
+    });
+    // Shorter expiry than uploads: this is for immediate playback,
+    // not something the client should hold onto.
+    return getSignedUrl(this.signingClient, command, { expiresIn: 3600 });
   }
 }

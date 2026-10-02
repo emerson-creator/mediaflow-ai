@@ -38,6 +38,27 @@ export class MediaController {
     return this.media.findAllForUser(userId);
   }
 
+  @Get(':id/details')
+  findDetails(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('Missing user context');
+    }
+
+    return this.media.findDetailsForUser(id, userId);
+  }
+
+  @Get(':id/playback')
+  getPlayback(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    if (!userId) throw new BadRequestException('Missing user context');
+    return this.media.getPlaybackInfo(id, userId);
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,

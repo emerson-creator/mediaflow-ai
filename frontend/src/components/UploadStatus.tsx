@@ -31,7 +31,7 @@ export function UploadStatus({
     return (
       <div
         role="alert"
-        className="mb-6 flex items-center justify-between gap-4 rounded-md border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad"
+        className="mt-4 flex items-center justify-between gap-4 rounded-md border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad"
       >
         <span>{error}</span>
         <button
@@ -52,7 +52,7 @@ export function UploadStatus({
   return (
     <div
       aria-live="polite"
-      className="mb-6 rounded-lg border border-line bg-panel px-4 py-3"
+      className="mt-4 rounded-lg border border-line bg-panel px-4 py-3"
     >
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
         <span className="truncate">{fileName}</span>

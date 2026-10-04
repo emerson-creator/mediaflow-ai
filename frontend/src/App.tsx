@@ -12,6 +12,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { MediaDetailPage } from "./pages/MediaDetailPage";
 import { TooManyRequestsPage } from "./pages/TooManyRequestsPage";
+import { LibraryPage } from "./pages/LibraryPage";
 
 export function App() {
   return (
@@ -25,6 +26,7 @@ export function App() {
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/media/:id" element={<MediaDetailPage />} />
+              <Route path="/library" element={<LibraryPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

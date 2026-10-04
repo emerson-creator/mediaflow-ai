@@ -26,6 +26,7 @@ export interface LiveState {
   /** mediaId -> nombre legible, para toasts y log de actividad. */
   titles: Record<string, string>;
   dismissToast: (id: string) => void;
+  clearToasts: () => void;
   registerMedia: (
     items: Pick<MediaItem, "id" | "title" | "filename">[],
   ) => void;

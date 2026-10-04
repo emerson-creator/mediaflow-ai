@@ -74,3 +74,5 @@ export function useUpload(onUploaded: () => void) {
     dismissError,
   };
 }
+
+export type UploadController = ReturnType<typeof useUpload>;

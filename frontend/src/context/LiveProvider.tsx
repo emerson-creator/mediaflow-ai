@@ -17,8 +17,7 @@ import {
 } from "./live-context";
 
 const MAX_ACTIVITY = 40;
-const MAX_TOASTS = 3;
-const TOAST_MS = 6000;
+const MAX_TOASTS = 10;
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -32,35 +31,29 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [titles, setTitles] = useState<Record<string, string>>({});
 
   const listeners = useRef(new Set<(event: ProgressEvent) => void>());
-  const timers = useRef(new Map<string, number>());
   const seq = useRef(0);
 
   useEffect(() => {
     pathRef.current = location.pathname;
   });
 
-  useEffect(() => {
-    const active = timers.current;
-    return () => active.forEach((timer) => window.clearTimeout(timer));
-  }, []);
-
   const dismissToast = useCallback((id: string) => {
-    window.clearTimeout(timers.current.get(id));
-    timers.current.delete(id);
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const pushToast = useCallback(
-    (toast: Omit<Toast, "id">) => {
-      const id = `toast-${++seq.current}`;
-      setToasts((prev) => [...prev.slice(-(MAX_TOASTS - 1)), { ...toast, id }]);
-      timers.current.set(
-        id,
-        window.setTimeout(() => dismissToast(id), TOAST_MS),
-      );
-    },
-    [dismissToast],
-  );
+  const clearToasts = useCallback(() => setToasts([]), []);
+
+  // Las tarjetas no caducan: se quedan hasta que el usuario las cierra o abre el resultado.
+  // Un resultado nuevo del mismo media reemplaza al anterior.
+  const pushToast = useCallback((toast: Omit<Toast, "id">) => {
+    const id = `toast-${++seq.current}`;
+    setToasts((prev) =>
+      [
+        ...prev.filter((t) => t.mediaId !== toast.mediaId),
+        { ...toast, id },
+      ].slice(-MAX_TOASTS),
+    );
+  }, []);
 
   // Estable a propósito: useSocket no re-suscribe cuando cambia el callback.
   const handleProgress = useCallback(
@@ -140,6 +133,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       toasts,
       titles,
       dismissToast,
+      clearToasts,
       registerMedia,
       subscribe,
     }),
@@ -150,6 +144,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       toasts,
       titles,
       dismissToast,
+      clearToasts,
       registerMedia,
       subscribe,
     ],

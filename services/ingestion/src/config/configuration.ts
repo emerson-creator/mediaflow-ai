@@ -1,11 +1,7 @@
 export default () => ({
   port: parseInt(process.env.INGESTION_PORT ?? '3001', 10),
   database: {
-    host: process.env.POSTGRES_HOST ?? 'localhost',
-    port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
-    username: process.env.POSTGRES_USER,
-    password: process.env.POSTGRES_PASSWORD,
-    database: process.env.POSTGRES_DB,
+    url: process.env.DATABASE_URL,
   },
   rabbitmq: {
     url: `amqp://${process.env.RABBITMQ_USER}:${process.env.RABBITMQ_PASSWORD}@${

@@ -13,28 +13,22 @@ import { LoggingModule } from './logging/logging.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: ['../../.env'], // el .env vive en la raíz del monorepo
+      envFilePath: ['../../.env'], //  .env
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): TypeOrmModuleOptions => {
-        const database = config.getOrThrow<{
-          host: string;
-          port: number;
-          username?: string;
-          password?: string;
-          database?: string;
-        }>('database');
+        const dbUrl = config.getOrThrow<string>('database.url');
 
         return {
           type: 'postgres',
-          host: database.host,
-          port: database.port,
-          username: database.username,
-          password: database.password,
-          database: database.database,
+          url: dbUrl,
+          // tl;dr: Neon requires SSL, but with rejectUnauthorized=false. See
+          ssl: {
+            rejectUnauthorized: false,
+          },
           autoLoadEntities: true,
-          // ⚠️ SOLO desarrollo. En producción usaremos migraciones.
+          // change later to false in production, and use migrations instead of synchronize
           synchronize: true,
         };
       },

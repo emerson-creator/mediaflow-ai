@@ -1,9 +1,16 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file="../../.env",  # Apunta al .env en la raíz del monorepo
+        extra="ignore",
+    )
 
+    # Postgres (Neon)
+    postgres_dsn: str = Field(validation_alias="DATABASE_URL")
+    postgres_ssl: bool = Field(default=True, validation_alias="POSTGRES_SSL")
     # RabbitMQ
     rabbitmq_user: str
     rabbitmq_password: str
@@ -18,13 +25,6 @@ class Settings(BaseSettings):
     minio_root_user: str
     minio_root_password: str
     minio_bucket: str = "media-uploads"
-
-    # Postgres
-    postgres_host: str = "postgres"
-    postgres_port: int = 5432
-    postgres_user: str
-    postgres_password: str
-    postgres_db: str
 
     # OpenAI
     openai_api_key: str
@@ -41,13 +41,6 @@ class Settings(BaseSettings):
     @property
     def minio_endpoint(self) -> str:
         return f"http://{self.minio_host}:{self.minio_api_port}"
-
-    @property
-    def postgres_dsn(self) -> str:
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
 
 
 settings = Settings()

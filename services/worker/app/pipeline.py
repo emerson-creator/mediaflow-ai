@@ -20,7 +20,7 @@ from app.media.youtube import (
 )
 from app.messaging.publisher import ProgressPublisher
 from app.retry import with_retry
-from app.storage.minio_client import download_object, upload_object
+from app.storage.s3_client import download_object, upload_object
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ async def process_youtube_media(event: dict, publisher: ProgressPublisher) -> No
         size_bytes = os.path.getsize(downloaded_path)
         ext = Path(downloaded_path).suffix.lstrip(".")
         object_key = f"uploads/{user_id}/{media_id}/youtube_audio.{ext}"
-        bucket = settings.minio_bucket
+        bucket = settings.s3_bucket
 
         await with_retry(
             lambda: upload_object(bucket, object_key, downloaded_path),

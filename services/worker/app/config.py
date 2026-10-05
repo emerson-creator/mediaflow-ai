@@ -19,12 +19,11 @@ class Settings(BaseSettings):
     exchange_name: str = "mediaflow.events"
     upload_queue: str = "worker.media.uploaded"
 
-    # MinIO
-    minio_host: str = "minio"
-    minio_api_port: int = 9000
-    minio_root_user: str
-    minio_root_password: str
-    minio_bucket: str = "media-uploads"
+  # AWS S3
+    aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
+    aws_access_key_id: str = Field(validation_alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str = Field(validation_alias="AWS_SECRET_ACCESS_KEY")
+    s3_bucket: str = Field(default="mediaflow-storage", validation_alias="AWS_BUCKET_NAME")
 
     # OpenAI
     openai_api_key: str
@@ -37,10 +36,6 @@ class Settings(BaseSettings):
             f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}"
             f"@{self.rabbitmq_host}:{self.rabbitmq_port}/"
         )
-
-    @property
-    def minio_endpoint(self) -> str:
-        return f"http://{self.minio_host}:{self.minio_api_port}"
 
 
 settings = Settings()

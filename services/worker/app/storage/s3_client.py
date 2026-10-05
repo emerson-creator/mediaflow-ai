@@ -14,10 +14,9 @@ _session = aioboto3.Session()
 async def s3_client():
     async with _session.client(
         "s3",
-        endpoint_url=settings.minio_endpoint,
-        aws_access_key_id=settings.minio_root_user,
-        aws_secret_access_key=settings.minio_root_password,
-        region_name="us-east-1",
+        region_name=settings.aws_region,
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key,
     ) as client:
         yield client
 

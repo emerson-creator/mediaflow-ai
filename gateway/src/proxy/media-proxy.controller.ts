@@ -26,27 +26,39 @@ export class MediaProxyController {
     this.ingestionUrl = config.getOrThrow('ingestionUrl');
   }
 
+  // 1. Limite más permisivo para lecturas de la librería y navegación en el frontend
+  // (120 peticiones por minuto por usuario)
   @Get()
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   proxyRoot(@Req() req: Request, @Res() res: Response) {
     return this.proxy(req, res);
   }
 
-  // Stricter limit specifically for creating uploads: 10 per minute per user.
-  // This route spends real resources (DB row + presigned URL).
+  // 2. Límite estricto para crear presigned URLs (10 por minuto)
   @Post('uploads')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   proxyUpload(@Req() req: Request, @Res() res: Response) {
     return this.proxy(req, res);
   }
 
+  // 3. Límite estricto para procesar desde YouTube (10 por minuto)
+  @Post('from-youtube')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @All('from-youtube')
-  async createYoutubeUpload(@Req() req: Request, @Res() res: Response) {
+  createYoutubeUpload(@Req() req: Request, @Res() res: Response) {
     return this.proxy(req, res);
   }
 
-  // Catches GET/POST on /media and any subpath, e.g. /media/uploads, /media/:id
+  // 4. Captura endpoints dinámicos como GET /media/:id o subrutas de lectura
+  // Le asignamos un límite holgado para que la navegación no bloquee al cliente
+  @Get(':id')
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  proxyMediaById(@Req() req: Request, @Res() res: Response) {
+    return this.proxy(req, res);
+  }
+
+  // 5. Fallback para cualquier otra subruta
   @All('{*path}')
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   async proxy(@Req() req: Request, @Res() res: Response) {
     const userId = (req.user as { userId: string }).userId;
     const targetUrl = `${this.ingestionUrl}${req.originalUrl}`;
@@ -59,9 +71,6 @@ export class MediaProxyController {
           data: req.body,
           headers: {
             'Content-Type': 'application/json',
-            // Internal-only header. Ingestion trusts this because it's
-            // only reachable from the Gateway inside the Docker network,
-            // never exposed directly to the internet.
             'x-user-id': userId,
           },
         }),

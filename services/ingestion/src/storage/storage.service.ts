@@ -6,35 +6,29 @@ import {
   S3Client,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HealthIndicatorResult } from '@nestjs/terminus';
-import { HeadBucketCommand } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class StorageService {
   private readonly bucket: string;
   private readonly expiresIn: number;
-  // Cliente para operaciones server-side (red interna)
-  private readonly internalClient: S3Client;
-  // Cliente SOLO para firmar URLs con el host que verá el navegador
-  private readonly signingClient: S3Client;
+  private readonly s3Client: S3Client;
 
   constructor(config: ConfigService) {
     const s3 = config.getOrThrow('s3');
     this.bucket = s3.bucket;
     this.expiresIn = s3.presignExpiresSeconds;
 
-    const common = {
+    // Cliente único nativo de AWS S3
+    this.s3Client = new S3Client({
       region: s3.region,
-      forcePathStyle: true, // obligatorio para MinIO
-      credentials: { accessKeyId: s3.accessKey, secretAccessKey: s3.secretKey },
-    };
-
-    this.internalClient = new S3Client({ ...common, endpoint: s3.endpoint });
-    this.signingClient = new S3Client({
-      ...common,
-      endpoint: s3.publicEndpoint,
+      credentials: {
+        accessKeyId: s3.accessKey,
+        secretAccessKey: s3.secretKey,
+      },
     });
   }
 
@@ -47,7 +41,7 @@ export class StorageService {
       Key: objectKey,
       ContentType: contentType,
     });
-    return getSignedUrl(this.signingClient, command, {
+    return getSignedUrl(this.s3Client, command, {
       expiresIn: this.expiresIn,
     });
   }
@@ -55,7 +49,7 @@ export class StorageService {
   /** Devuelve metadata del objeto o null si no existe */
   async headObject(objectKey: string) {
     try {
-      return await this.internalClient.send(
+      return await this.s3Client.send(
         new HeadObjectCommand({ Bucket: this.bucket, Key: objectKey }),
       );
     } catch (err: any) {
@@ -72,17 +66,15 @@ export class StorageService {
 
   async healthCheck(): Promise<HealthIndicatorResult> {
     try {
-      await this.internalClient.send(
-        new HeadBucketCommand({ Bucket: this.bucket }),
-      );
-      return { minio: { status: 'up' } };
+      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return { s3: { status: 'up' } };
     } catch {
-      return { minio: { status: 'down' } };
+      return { s3: { status: 'down' } };
     }
   }
 
   async deleteObject(objectKey: string): Promise<void> {
-    await this.internalClient.send(
+    await this.s3Client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }),
     );
   }
@@ -92,8 +84,6 @@ export class StorageService {
       Bucket: this.bucket,
       Key: objectKey,
     });
-    // Shorter expiry than uploads: this is for immediate playback,
-    // not something the client should hold onto.
-    return getSignedUrl(this.signingClient, command, { expiresIn: 3600 });
+    return getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
   }
 }

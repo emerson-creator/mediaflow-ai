@@ -10,15 +10,10 @@ export default () => ({
     exchange: 'mediaflow.events',
   },
   s3: {
-    endpoint: `http://${process.env.MINIO_HOST ?? 'localhost'}:${
-      process.env.MINIO_API_PORT ?? '9000'
-    }`,
-    // URL que verá el navegador (importante en Docker, ver nota abajo)
-    publicEndpoint: process.env.MINIO_PUBLIC_URL ?? 'http://localhost:9000',
-    accessKey: process.env.MINIO_ROOT_USER,
-    secretKey: process.env.MINIO_ROOT_PASSWORD,
-    bucket: process.env.MINIO_BUCKET ?? 'media-uploads',
-    region: 'us-east-1',
-    presignExpiresSeconds: 900,
+    accessKey: process.env.AWS_ACCESS_KEY_ID,
+    secretKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION ?? 'us-east-1',
+    bucket: process.env.AWS_BUCKET_NAME ?? 'media-uploads',
+    presignExpiresSeconds: 900, // 15 minutes
   },
 });

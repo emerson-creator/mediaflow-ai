@@ -25,18 +25,28 @@ import { UserThrottlerGuard } from './common/user-throttler.guard';
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService): TypeOrmModuleOptions => ({
-        ...config.getOrThrow<{
+      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
+        const database = config.getOrThrow<{
+          url?: string;
           host: string;
           port: number;
           username?: string;
           password?: string;
           database?: string;
-        }>('database'),
-        type: 'postgres',
-        autoLoadEntities: true,
-        synchronize: true, // dev only, same as the other services
-      }),
+        }>('database');
+
+        return {
+          ...(database.url
+            ? {
+                url: database.url,
+                ssl: { rejectUnauthorized: false },
+              }
+            : database),
+          type: 'postgres',
+          autoLoadEntities: true,
+          synchronize: true, // dev only, same as the other services
+        };
+      },
     }),
     AuthModule,
     ProxyModule,

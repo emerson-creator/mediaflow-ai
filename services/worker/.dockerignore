@@ -4,3 +4,10 @@ __pycache__/
 tests/
 .env
 tsconfig.build.tsbuildinfo
+@"
+__pycache__
+*.pyc
+.venv
+.env
+.env.*
+!.env.example

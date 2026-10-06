@@ -18,9 +18,13 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const requestUrl = error.config?.url;
+    const isAuthRequest =
+      requestUrl === "/auth/login" || requestUrl === "/auth/register";
+
     if (error.response?.status === 429) {
       window.location.href = "/too-many-requests";
-    } else if (error.response?.status === 401) {
+    } else if (error.response?.status === 401 && !isAuthRequest) {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("user");
       window.location.href = "/login";

@@ -1,0 +1,122 @@
+name: mediaflow-local
+
+services:
+  frontend:
+    image: mediaflow-frontend:local
+    container_name: mediaflow-local-frontend
+    restart: unless-stopped
+    depends_on:
+      - gateway
+      - notification
+    ports:
+      - "8080:80"
+    networks:
+      - mediaflow
+
+  gateway:
+    image: mediaflow-gateway:test
+    container_name: mediaflow-local-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      GATEWAY_PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      INGESTION_URL: http://ingestion:3001
+    expose:
+      - "3000"
+    networks:
+      - mediaflow
+
+  ingestion:
+    image: mediaflow-ingestion:test
+    container_name: mediaflow-local-ingestion
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      INGESTION_PORT: 3001
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
+    expose:
+      - "3001"
+    networks:
+      - mediaflow
+
+  notification:
+    image: mediaflow-notification:test
+    container_name: mediaflow-local-notification
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NOTIFICATION_PORT: 3002
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      CORS_ORIGINS: http://localhost:8080
+    expose:
+      - "3002"
+    networks:
+      - mediaflow
+
+  worker:
+    image: mediaflow-worker:test
+    container_name: mediaflow-local-worker
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
+      DATABASE_URL: ${DATABASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    networks:
+      - mediaflow
+
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    container_name: mediaflow-local-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_local_data:/var/lib/rabbitmq
+    expose:
+      - "5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    networks:
+      - mediaflow
+
+volumes:
+  rabbitmq_local_data:
+
+networks:
+  mediaflow:
+    driver: bridge

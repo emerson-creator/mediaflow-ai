@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+from app.config import settings
 
 from app.errors import PermanentError, RetryableError
 
@@ -9,6 +10,15 @@ logger = logging.getLogger(__name__)
 
 MAX_DURATION_SECONDS = 2 * 60 * 60  # same limit as regular uploads
 
+
+def yt_dlp_command(*args: str) -> list[str]:
+    cmd = ["yt-dlp"]
+
+    if settings.youtube_cookies_file:
+        cmd.extend(["--cookies", settings.youtube_cookies_file])
+
+    cmd.extend(args)
+    return cmd
 
 class YoutubeMetadataError(PermanentError):
     """URL is invalid, video is private/deleted/age-restricted, etc."""
@@ -26,7 +36,7 @@ async def fetch_metadata(url: str) -> dict:
     """Fetch video metadata WITHOUT downloading, using yt-dlp --dump-json.
     Fast (1-2s) regardless of video length, since it doesn't touch the media itself.
     """
-    cmd = ["yt-dlp", "--dump-json", "--no-playlist", url]
+    cmd = yt_dlp_command("--dump-json", "--no-playlist", url)
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -71,13 +81,12 @@ async def download_audio(url: str, output_dir: str) -> str:
     """
     output_template = str(Path(output_dir) / "audio.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
+    cmd = yt_dlp_command(
         "--no-playlist",
         "-f", "bestaudio[ext=m4a]/bestaudio",
         "-o", output_template,
         url,
-    ]
+    )
 
     logger.info("Downloading audio via yt-dlp", extra={"url": url})
 

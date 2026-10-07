@@ -7,6 +7,7 @@ import { ProxyModule } from './proxy/proxy.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { UserThrottlerGuard } from './common/user-throttler.guard';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { UserThrottlerGuard } from './common/user-throttler.guard';
       },
     }),
     AuthModule,
+    HealthModule,
     ProxyModule,
   ],
   providers: [

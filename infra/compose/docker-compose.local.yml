@@ -25,6 +25,12 @@ services:
       INGESTION_URL: http://ingestion:3001
     expose:
       - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - mediaflow
 
@@ -49,6 +55,12 @@ services:
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
     expose:
       - "3001"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - mediaflow
 
@@ -70,6 +82,12 @@ services:
       CORS_ORIGINS: http://localhost:8080
     expose:
       - "3002"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - mediaflow
 

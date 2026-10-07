@@ -1,8 +1,12 @@
 FROM python:3.12-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg curl libmagic1 ca-certificates && \
+    apt-get install -y --no-install-recommends ffmpeg curl libmagic1 ca-certificates unzip && \
     rm -rf /var/lib/apt/lists/*
+
+# Install Deno for yt-dlp JavaScript challenge solving
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh && \
+    /usr/local/bin/deno --version
 
 WORKDIR /app
 

@@ -11,12 +11,30 @@ import {
 import { useAuth } from "../context/useAuth";
 
 export function RegisterPage() {
+  const demoEmail = import.meta.env.VITE_DEMO_EMAIL;
+  const demoPassword = import.meta.env.VITE_DEMO_PASSWORD;
+  const hasDemoAccess = Boolean(demoEmail && demoPassword);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
+
+  async function handleDemoLogin() {
+    if (!demoEmail || !demoPassword) return;
+
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await login(demoEmail, demoPassword);
+      navigate("/dashboard");
+    } catch {
+      setError("Unable to enter demo");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -91,6 +109,17 @@ export function RegisterPage() {
         >
           {isSubmitting ? "Creating account..." : "Create account"}
         </button>
+
+        {hasDemoAccess && (
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => void handleDemoLogin()}
+            className="mt-3 w-full rounded-md border border-line-strong py-2 text-sm font-medium text-ink transition-colors hover:bg-panel disabled:opacity-40"
+          >
+            {isSubmitting ? "Entering demo..." : "Enter demo"}
+          </button>
+        )}
       </form>
     </AuthLayout>
   );

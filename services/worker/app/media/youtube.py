@@ -15,7 +15,13 @@ def yt_dlp_command(*args: str) -> list[str]:
     cmd = ["yt-dlp"]
 
     if settings.youtube_cookies_file:
-        cmd.extend(["--cookies", settings.youtube_cookies_file])
+        cookies_path = Path(settings.youtube_cookies_file)
+        writable_cookies_path = Path("/tmp/youtube-cookies.txt")
+
+        if not writable_cookies_path.exists():
+            writable_cookies_path.write_bytes(cookies_path.read_bytes())
+
+        cmd.extend(["--cookies", str(writable_cookies_path)])
 
     cmd.extend(args)
     return cmd

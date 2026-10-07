@@ -141,25 +141,166 @@ jobs:
           script: |
             set -e
 
-            sed -i "s|^FRONTEND_IMAGE=.*|FRONTEND_IMAGE=ghcr.io/emerson-creator/mediaflow-frontend:${IMAGE_TAG}|" /opt/mediaflow/secrets/production.env
-            sed -i "s|^GATEWAY_IMAGE=.*|GATEWAY_IMAGE=ghcr.io/emerson-creator/mediaflow-gateway:${IMAGE_TAG}|" /opt/mediaflow/secrets/production.env
-            sed -i "s|^INGESTION_IMAGE=.*|INGESTION_IMAGE=ghcr.io/emerson-creator/mediaflow-ingestion:${IMAGE_TAG}|" /opt/mediaflow/secrets/production.env
-            sed -i "s|^NOTIFICATION_IMAGE=.*|NOTIFICATION_IMAGE=ghcr.io/emerson-creator/mediaflow-notification:${IMAGE_TAG}|" /opt/mediaflow/secrets/production.env
-            sed -i "s|^WORKER_IMAGE=.*|WORKER_IMAGE=ghcr.io/emerson-creator/mediaflow-worker:${IMAGE_TAG}|" /opt/mediaflow/secrets/production.env
+            ENV_FILE="/opt/mediaflow/secrets/production.env"
+            COMPOSE_FILE="/opt/mediaflow/compose/docker-compose.prod.yml"
+
+            echo "==> Reading currently deployed images"
+
+            PREV_FRONTEND_IMAGE=$(grep '^FRONTEND_IMAGE=' "$ENV_FILE")
+            PREV_GATEWAY_IMAGE=$(grep '^GATEWAY_IMAGE=' "$ENV_FILE")
+            PREV_INGESTION_IMAGE=$(grep '^INGESTION_IMAGE=' "$ENV_FILE")
+            PREV_NOTIFICATION_IMAGE=$(grep '^NOTIFICATION_IMAGE=' "$ENV_FILE")
+            PREV_WORKER_IMAGE=$(grep '^WORKER_IMAGE=' "$ENV_FILE")
+
+            echo "Previous version:"
+            echo "  $PREV_FRONTEND_IMAGE"
+            echo "  $PREV_GATEWAY_IMAGE"
+            echo "  $PREV_INGESTION_IMAGE"
+            echo "  $PREV_NOTIFICATION_IMAGE"
+            echo "  $PREV_WORKER_IMAGE"
+
+            rollback() {
+              echo ""
+              echo "========================================"
+              echo "DEPLOYMENT FAILED - STARTING ROLLBACK"
+              echo "========================================"
+
+              sed -i "s|^FRONTEND_IMAGE=.*|$PREV_FRONTEND_IMAGE|" "$ENV_FILE"
+              sed -i "s|^GATEWAY_IMAGE=.*|$PREV_GATEWAY_IMAGE|" "$ENV_FILE"
+              sed -i "s|^INGESTION_IMAGE=.*|$PREV_INGESTION_IMAGE|" "$ENV_FILE"
+              sed -i "s|^NOTIFICATION_IMAGE=.*|$PREV_NOTIFICATION_IMAGE|" "$ENV_FILE"
+              sed -i "s|^WORKER_IMAGE=.*|$PREV_WORKER_IMAGE|" "$ENV_FILE"
+
+              echo "==> Restoring previous containers"
+
+              if ! docker compose \
+                --env-file "$ENV_FILE" \
+                -f "$COMPOSE_FILE" \
+                up -d; then
+                echo "========================================"
+                echo "ROLLBACK FAILED TO START PREVIOUS VERSION"
+                echo "========================================"
+
+                docker compose \
+                  --env-file "$ENV_FILE" \
+                  -f "$COMPOSE_FILE" \
+                  ps
+
+                return 1
+              fi
+
+              echo "==> Waiting for rollback healthchecks"
+
+              for i in {1..18}; do
+                GATEWAY_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-gateway 2>/dev/null || echo "missing")
+                INGESTION_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-ingestion 2>/dev/null || echo "missing")
+                NOTIFICATION_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-notification 2>/dev/null || echo "missing")
+                RABBITMQ_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-rabbitmq 2>/dev/null || echo "missing")
+                WORKER_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-worker 2>/dev/null || echo "missing")
+
+                echo "Rollback health: gateway=$GATEWAY_STATUS ingestion=$INGESTION_STATUS notification=$NOTIFICATION_STATUS rabbitmq=$RABBITMQ_STATUS worker=$WORKER_STATUS"
+
+                if [ "$GATEWAY_STATUS" = "healthy" ] &&
+                   [ "$INGESTION_STATUS" = "healthy" ] &&
+                   [ "$NOTIFICATION_STATUS" = "healthy" ] &&
+                   [ "$RABBITMQ_STATUS" = "healthy" ] &&
+                   [ "$WORKER_STATUS" = "healthy" ]; then
+                  echo "========================================"
+                  echo "ROLLBACK COMPLETED SUCCESSFULLY"
+                  echo "========================================"
+
+                  docker compose \
+                    --env-file "$ENV_FILE" \
+                    -f "$COMPOSE_FILE" \
+                    ps
+
+                  return 0
+                fi
+
+                sleep 5
+              done
+
+              echo "========================================"
+              echo "ROLLBACK FAILED"
+              echo "========================================"
+
+              docker compose \
+                --env-file "$ENV_FILE" \
+                -f "$COMPOSE_FILE" \
+                ps
+
+              return 1
+            }
+
+            echo "==> Updating production image tags"
+
+            sed -i "s|^FRONTEND_IMAGE=.*|FRONTEND_IMAGE=ghcr.io/emerson-creator/mediaflow-frontend:${IMAGE_TAG}|" "$ENV_FILE"
+            sed -i "s|^GATEWAY_IMAGE=.*|GATEWAY_IMAGE=ghcr.io/emerson-creator/mediaflow-gateway:${IMAGE_TAG}|" "$ENV_FILE"
+            sed -i "s|^INGESTION_IMAGE=.*|INGESTION_IMAGE=ghcr.io/emerson-creator/mediaflow-ingestion:${IMAGE_TAG}|" "$ENV_FILE"
+            sed -i "s|^NOTIFICATION_IMAGE=.*|NOTIFICATION_IMAGE=ghcr.io/emerson-creator/mediaflow-notification:${IMAGE_TAG}|" "$ENV_FILE"
+            sed -i "s|^WORKER_IMAGE=.*|WORKER_IMAGE=ghcr.io/emerson-creator/mediaflow-worker:${IMAGE_TAG}|" "$ENV_FILE"
 
             cd /opt/mediaflow
 
-            docker compose \
-              --env-file /opt/mediaflow/secrets/production.env \
-              -f /opt/mediaflow/compose/docker-compose.prod.yml \
-              pull
+            echo "==> Pulling new images"
+
+            if ! docker compose \
+              --env-file "$ENV_FILE" \
+              -f "$COMPOSE_FILE" \
+              pull; then
+              rollback
+              exit 1
+            fi
+
+            echo "==> Starting new version"
+
+            if ! docker compose \
+              --env-file "$ENV_FILE" \
+              -f "$COMPOSE_FILE" \
+              up -d; then
+              rollback
+              exit 1
+            fi
+
+            echo "==> Waiting for production healthchecks"
+
+            for i in {1..18}; do
+              GATEWAY_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-gateway 2>/dev/null || echo "missing")
+              INGESTION_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-ingestion 2>/dev/null || echo "missing")
+              NOTIFICATION_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-notification 2>/dev/null || echo "missing")
+              RABBITMQ_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-rabbitmq 2>/dev/null || echo "missing")
+              WORKER_STATUS=$(docker inspect -f '{{.State.Health.Status}}' mediaflow-worker 2>/dev/null || echo "missing")
+
+              echo "Health: gateway=$GATEWAY_STATUS ingestion=$INGESTION_STATUS notification=$NOTIFICATION_STATUS rabbitmq=$RABBITMQ_STATUS worker=$WORKER_STATUS"
+
+              if [ "$GATEWAY_STATUS" = "healthy" ] &&
+                 [ "$INGESTION_STATUS" = "healthy" ] &&
+                 [ "$NOTIFICATION_STATUS" = "healthy" ] &&
+                 [ "$RABBITMQ_STATUS" = "healthy" ] &&
+                 [ "$WORKER_STATUS" = "healthy" ]; then
+                echo "========================================"
+                echo "DEPLOYMENT HEALTHCHECK PASSED"
+                echo "========================================"
+
+                docker compose \
+                  --env-file "$ENV_FILE" \
+                  -f "$COMPOSE_FILE" \
+                  ps
+
+                exit 0
+              fi
+
+              sleep 5
+            done
+
+            echo "========================================"
+            echo "DEPLOYMENT HEALTHCHECK FAILED"
+            echo "========================================"
 
             docker compose \
-              --env-file /opt/mediaflow/secrets/production.env \
-              -f /opt/mediaflow/compose/docker-compose.prod.yml \
-              up -d
-
-            docker compose \
-              --env-file /opt/mediaflow/secrets/production.env \
-              -f /opt/mediaflow/compose/docker-compose.prod.yml \
+              --env-file "$ENV_FILE" \
+              -f "$COMPOSE_FILE" \
               ps
+
+            rollback
+            exit 1

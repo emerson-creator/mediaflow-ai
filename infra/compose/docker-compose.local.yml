@@ -109,6 +109,33 @@ services:
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
       DATABASE_URL: ${DATABASE_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+    expose:
+      - "8000"
+    networks:
+      - mediaflow
+
+  prometheus:
+    image: prom/prometheus:v3.8.0
+    container_name: mediaflow-local-prometheus
+    restart: unless-stopped
+    volumes:
+      - ../../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_local_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - mediaflow
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mediaflow-local-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_local_data:/var/lib/grafana
     networks:
       - mediaflow
 
@@ -123,6 +150,7 @@ services:
       - rabbitmq_local_data:/var/lib/rabbitmq
     expose:
       - "5672"
+      - "15692"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -134,6 +162,8 @@ services:
 
 volumes:
   rabbitmq_local_data:
+  prometheus_local_data:
+  grafana_local_data:
 
 networks:
   mediaflow:

@@ -1,6 +1,15 @@
 import json
 import logging
 from datetime import datetime, timezone
+from time import perf_counter
+
+from app.metrics import (
+    dlq_total,
+    job_duration_seconds,
+    jobs_active,
+    jobs_total,
+    retries_total,
+)
 
 import aio_pika
 from aio_pika.abc import AbstractExchange, AbstractIncomingMessage
@@ -94,6 +103,7 @@ async def handle_message(
     log_ctx = {"mediaId": media_id, "eventId": event.get("eventId"), "attempt": attempt}
 
     status = await get_media_status(media_id)
+
     if status == "DONE":
         logger.info("Duplicate delivery, media already DONE; skipping", extra=log_ctx)
         await message.ack()
@@ -103,13 +113,25 @@ async def handle_message(
         await message.ack()
         return
 
+    source_type = (
+        "youtube"
+        if original_routing_key == "media.youtube_requested"
+        else "upload"
+    )
+
+    start_time = perf_counter()
+    jobs_active.inc()
+
     try:
         if original_routing_key == "media.youtube_requested":
             await process_youtube_media(event, publisher)
         else:
             await process_media(event, publisher)
         await message.ack()
-
+        jobs_total.labels(
+            source_type=source_type,
+            result="success",
+        ).inc()
     except PermanentError as exc:
         logger.error("Permanent failure, sending to DLQ", extra={**log_ctx, "error": str(exc)})
         await _publish_to(
@@ -118,6 +140,12 @@ async def handle_message(
              "x-failed-at": datetime.now(timezone.utc).isoformat()},
         )
         await message.ack()
+        jobs_total.labels(
+            source_type=source_type,
+            result="permanent_failure",
+        ).inc()
+
+        dlq_total.inc()
 
     except RetryableError as exc:
         if attempt >= MAX_ATTEMPTS:
@@ -129,8 +157,19 @@ async def handle_message(
                  "x-failed-at": datetime.now(timezone.utc).isoformat()},
             )
             await message.ack()
+
+            jobs_total.labels(
+                source_type=source_type,
+                result="retries_exhausted",
+            ).inc()
+
+            dlq_total.inc()
+
         else:
             routing_key, ttl_ms = RETRY_TIERS[attempt - 1]
+
+            retries_total.inc()
+
             logger.warning(
                 "Scheduling message retry",
                 extra={**log_ctx, "next_attempt": attempt + 1, "retry_in_seconds": ttl_ms // 1000},
@@ -139,6 +178,12 @@ async def handle_message(
 
             await _publish_to(retry_ex, routing_key, retry_event)
             await message.ack()
+    finally:
+        jobs_active.dec()
+
+        job_duration_seconds.labels(
+            source_type=source_type,
+        ).observe(perf_counter() - start_time)
 
 
 async def update_failed(media_id: str, publisher: ProgressPublisher, event: dict, reason: str):

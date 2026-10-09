@@ -49,7 +49,8 @@ export function MediaDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<LoadError>(null);
 
-  const [playback, setPlayback] = useState<PlaybackInfo | null>(null);
+  const [rawPlayback, setRawPlayback] = useState<PlaybackInfo | null>(null);
+  const [playbackMediaId, setPlaybackMediaId] = useState<string | null>(null);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -59,31 +60,50 @@ export function MediaDetailPage() {
   const ytControls = useRef<YouTubeControls | null>(null);
   const [isYtReady, setIsYtReady] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!id) return;
+  const load = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
+      if (!id) return;
 
-    try {
-      const result = await mediaApi.getMediaDetails(id);
+      try {
+        const result = await mediaApi.getMediaDetails(id);
 
-      setData(result);
-      registerMedia([result.media]);
-      setLoadError(null);
-    } catch (err) {
-      setLoadError(
-        isAxiosError(err) && err.response?.status === 404
-          ? "notfound"
-          : "failed",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id, registerMedia]);
+        if (isCurrent()) {
+          setData(result);
+          registerMedia([result.media]);
+          setLoadError(null);
+        }
+      } catch (err) {
+        if (isCurrent()) {
+          setLoadError(
+            isAxiosError(err) && err.response?.status === 404
+              ? "notfound"
+              : "failed",
+          );
+        }
+      } finally {
+        if (isCurrent()) setIsLoading(false);
+      }
+    },
+    [id, registerMedia],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     queueMicrotask(() => {
-      if (!cancelled) void load();
+      if (cancelled) return;
+
+      setData(null);
+      setIsLoading(true);
+      setLoadError(null);
+      setRawPlayback(null);
+      setPlaybackMediaId(null);
+      setPlaybackFailed(false);
+      setCurrentTime(0);
+      setIsYtReady(false);
+      ytControls.current = null;
+      hasRetriedPlayback.current = false;
+      void load(() => !cancelled);
     });
 
     return () => {
@@ -109,17 +129,24 @@ export function MediaDetailPage() {
     [data],
   );
 
-  const loadPlayback = useCallback(async () => {
-    if (!id) return;
+  const loadPlayback = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
+      if (!id) return;
 
-    try {
-      setPlayback(await mediaApi.getPlayback(id));
-      setPlaybackFailed(false);
-    } catch (err) {
-      console.error("Failed to load playback URL", err);
-      setPlaybackFailed(true);
-    }
-  }, [id]);
+      try {
+        const result = await mediaApi.getPlayback(id);
+        if (isCurrent()) {
+          setRawPlayback(result);
+          setPlaybackMediaId(id);
+          setPlaybackFailed(false);
+        }
+      } catch (err) {
+        console.error("Failed to load playback URL", err);
+        if (isCurrent()) setPlaybackFailed(true);
+      }
+    },
+    [id],
+  );
 
   useEffect(() => {
     if (!isDone || videoId) return;
@@ -127,7 +154,9 @@ export function MediaDetailPage() {
     let cancelled = false;
 
     queueMicrotask(() => {
-      if (!cancelled) void loadPlayback();
+      if (cancelled) return;
+
+      void loadPlayback(() => !cancelled);
     });
 
     return () => {
@@ -136,6 +165,9 @@ export function MediaDetailPage() {
   }, [isDone, videoId, loadPlayback]);
 
   const transcription = data?.transcription ?? null;
+  const playback = playbackMediaId === id ? rawPlayback : null;
+  const directPlayback =
+    playback?.playbackType === "direct" ? playback : null;
 
   const segments = useMemo(
     () => transcription?.segments ?? [],
@@ -270,7 +302,9 @@ export function MediaDetailPage() {
         1000
       : null;
 
-    const isVideo = playback?.mimeType.startsWith("video/") ?? false;
+    const isVideo =
+      directPlayback !== null &&
+      (directPlayback.mimeType?.startsWith("video/") ?? false);
 
     body = (
       <>
@@ -452,7 +486,7 @@ export function MediaDetailPage() {
 
                   {videoId ? (
                     <span className="text-xs text-ink-faint">YouTube</span>
-                  ) : playback ? (
+                  ) : directPlayback ? (
                     <span className="text-xs text-ink-faint">
                       {isVideo ? "Video" : "Audio"}
                     </span>
@@ -470,14 +504,14 @@ export function MediaDetailPage() {
                       }}
                       onTime={setCurrentTime}
                     />
-                  ) : playback ? (
+                  ) : directPlayback ? (
                     isVideo ? (
                       <video
-                        key={playback.playbackUrl}
+                        key={directPlayback.playbackUrl}
                         ref={(el) => {
                           playerRef.current = el;
                         }}
-                        src={playback.playbackUrl}
+                        src={directPlayback.playbackUrl}
                         controls
                         preload="metadata"
                         onTimeUpdate={(e) =>
@@ -495,11 +529,11 @@ export function MediaDetailPage() {
                     ) : (
                       <div className="flex min-h-48 items-center justify-center bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 px-6">
                         <audio
-                          key={playback.playbackUrl}
+                          key={directPlayback.playbackUrl}
                           ref={(el) => {
                             playerRef.current = el;
                           }}
-                          src={playback.playbackUrl}
+                          src={directPlayback.playbackUrl}
                           controls
                           preload="metadata"
                           onTimeUpdate={(e) =>
@@ -697,7 +731,7 @@ export function MediaDetailPage() {
                   segments={segments}
                   fallbackText={transcription.transcript}
                   activeIndex={activeIndex}
-                  canSeek={videoId ? isYtReady : playback !== null}
+                  canSeek={videoId ? isYtReady : directPlayback !== null}
                   onSeek={seekTo}
                 />
               </section>

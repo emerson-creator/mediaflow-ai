@@ -72,8 +72,15 @@ export interface MediaDetails {
   transcription: Transcription | null;
 }
 
-export interface PlaybackInfo {
-  playbackType: string; // hoy solo se ha visto "direct"
+export interface DirectPlaybackInfo {
+  playbackType: "direct";
   playbackUrl: string;
-  mimeType: string;
+  mimeType: string | null;
 }
+
+export interface YouTubePlaybackInfo {
+  playbackType: "youtube";
+  youtubeUrl: string | null;
+}
+
+export type PlaybackInfo = DirectPlaybackInfo | YouTubePlaybackInfo;

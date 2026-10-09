@@ -8,6 +8,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { UserThrottlerGuard } from './common/user-throttler.guard';
 import { HealthModule } from './health/health.module';
+import { MetricsController } from './metrics/metrics.controller';
+import { MetricsService } from './metrics/metrics.service';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { HealthModule } from './health/health.module';
       provide: APP_GUARD,
       useClass: UserThrottlerGuard,
     },
+    MetricsService,
   ],
+  controllers: [MetricsController],
 })
 export class AppModule {}

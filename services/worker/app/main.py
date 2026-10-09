@@ -6,6 +6,7 @@ from pythonjsonlogger import jsonlogger
 from app.db.connection import close_pool
 from app.health import heartbeat_loop
 from app.messaging.consumer import start_consumer
+from prometheus_client import start_http_server
 
 logging.basicConfig(level=logging.INFO)
 handler = logging.StreamHandler()
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 async def main():
     logger.info("Starting MediaFlow Worker...")
+
+    start_http_server(8000)
 
     stop_event = asyncio.Event()
     heartbeat_task = asyncio.create_task(

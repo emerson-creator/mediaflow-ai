@@ -2,6 +2,15 @@ name: mediaflow-local
 
 services:
   frontend:
+    build:
+      context: ../..
+      dockerfile: infra/nginx/Dockerfile
+      args:
+        NGINX_CONFIG: nginx.local.conf
+        VITE_API_URL: ""
+        VITE_WS_URL: ""
+        VITE_DEMO_EMAIL: ${VITE_DEMO_EMAIL}
+        VITE_DEMO_PASSWORD: ${VITE_DEMO_PASSWORD}
     image: mediaflow-frontend:local
     container_name: mediaflow-local-frontend
     restart: unless-stopped
@@ -23,8 +32,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       INGESTION_URL: http://ingestion:3001
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
       interval: 10s
@@ -109,6 +118,33 @@ services:
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
       DATABASE_URL: ${DATABASE_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+    expose:
+      - "8000"
+    networks:
+      - mediaflow
+
+  prometheus:
+    image: prom/prometheus:v3.8.0
+    container_name: mediaflow-local-prometheus
+    restart: unless-stopped
+    volumes:
+      - ../../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_local_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - mediaflow
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mediaflow-local-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_local_data:/var/lib/grafana
     networks:
       - mediaflow
 
@@ -123,6 +159,7 @@ services:
       - rabbitmq_local_data:/var/lib/rabbitmq
     expose:
       - "5672"
+      - "15692"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -134,6 +171,8 @@ services:
 
 volumes:
   rabbitmq_local_data:
+  prometheus_local_data:
+  grafana_local_data:
 
 networks:
   mediaflow:

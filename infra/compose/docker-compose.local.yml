@@ -2,6 +2,15 @@ name: mediaflow-local
 
 services:
   frontend:
+    build:
+      context: ../..
+      dockerfile: infra/nginx/Dockerfile
+      args:
+        NGINX_CONFIG: nginx.local.conf
+        VITE_API_URL: ""
+        VITE_WS_URL: ""
+        VITE_DEMO_EMAIL: ${VITE_DEMO_EMAIL}
+        VITE_DEMO_PASSWORD: ${VITE_DEMO_PASSWORD}
     image: mediaflow-frontend:local
     container_name: mediaflow-local-frontend
     restart: unless-stopped
@@ -23,8 +32,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       INGESTION_URL: http://ingestion:3001
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
       interval: 10s
@@ -133,7 +142,7 @@ services:
     depends_on:
       - prometheus
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - grafana_local_data:/var/lib/grafana
     networks:

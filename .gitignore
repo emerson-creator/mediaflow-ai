@@ -34,3 +34,14 @@ Thumbs.db
 
 # Junk / test files
 corrupt.mp4
+# Test coverage artifacts
+.coverage
+htmlcov/
+
+# Test coverage artifacts
+.coverage
+htmlcov/
+
+# Test coverage artifacts
+.coverage
+htmlcov/

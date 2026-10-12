@@ -45,6 +45,7 @@ jobs:
         run: |
           npm ci
           npm run lint
+          npm run test
           npm run build
 
       - name: Validate ingestion
@@ -60,6 +61,31 @@ jobs:
           npm ci
           npm run lint
           npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install worker system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libmagic1
+
+      - name: Validate worker
+        working-directory: services/worker
+        env:
+          PYTHONPATH: ${{ github.workspace }}/services/worker
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          RABBITMQ_USER: test
+          RABBITMQ_PASSWORD: test
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          OPENAI_API_KEY: test
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pytest test -v
 
   publish:
     name: Build and publish Docker images

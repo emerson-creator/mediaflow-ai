@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { LibraryProvider } from "../context/LibraryProvider";
 import { LiveProvider } from "../context/LiveProvider";
@@ -94,7 +94,9 @@ function ShellLayout() {
             >
               <Menu size={18} aria-hidden />
             </button>
-            <Logo />
+            <Link to="/dashboard" aria-label="MediaFlow home">
+              <Logo />
+            </Link>
           </div>
         )}
         <Outlet />

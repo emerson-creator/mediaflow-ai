@@ -1,8 +1,85 @@
+<div align="center">
+
+<img src="frontend/public/favicon.svg" alt="MediaFlow AI logo" width="88" height="88" />
+
 # MediaFlow AI
 
-MediaFlow AI is a distributed media-processing platform built with TypeScript, Python, and RabbitMQ. It provides an asynchronous processing workflow for media files, with a web interface, service-based architecture, automated validation, and production observability.
+**Distributed, asynchronous media processing — observable from end to end.**
+
+A media-processing platform built with TypeScript, Python, and RabbitMQ, featuring a web interface,
+service-based architecture, automated validation, and production observability.
+
+<br />
+
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=for-the-badge&logo=socketdotio&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/Neon_PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![AWS S3](https://img.shields.io/badge/AWS_S3-569A31?style=for-the-badge&logo=amazons3&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+
+<br />
+
+![Gateway tests](https://img.shields.io/badge/gateway_tests-23_passing-brightgreen)
+![Worker tests](https://img.shields.io/badge/worker_tests-36_passing-brightgreen)
+
+[Preview](#preview) · [Architecture](#architecture) · [Observability](#observability) · [Testing](#testing) · [Local development](#local-development) · [CI/CD](#cicd)
+
+</div>
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Preview](#preview)
+- [Architecture](#architecture)
+- [Observability](#observability)
+- [Testing](#testing)
+- [Local development](#local-development)
+- [CI/CD](#cicd)
+- [Security considerations](#security-considerations)
+- [Engineering focus](#engineering-focus)
+
+## Overview
+
+MediaFlow AI provides an asynchronous processing workflow for media files. Users submit media through a web interface, the platform publishes jobs to RabbitMQ, a Python worker processes them independently of incoming requests, and clients receive real-time notifications as work progresses.
 
 The project focuses on backend engineering, asynchronous messaging, containerization, CI/CD, and operational monitoring.
+
+## Preview
+
+<!--
+  GIF tips:
+  - Keep each recording under ~15-20 seconds and ~8 MB.
+  - Record at ~1280px wide and export at 800-900px.
+  - Save them in docs/assets/ with the file names used below.
+-->
+
+### 🎬 Upload to result, in real time
+
+Submit a media file, watch the job move through the pipeline, and receive the live notification when processing completes.
+
+<p align="center">
+  <img src="frontend/public/mediaflow-demo.gif" alt="MediaFlow AI: upload, processing, and real-time notification" width="900" />
+</p>
+
+### 📈 Observability stack
+
+Grafana dashboards, Prometheus targets, and RabbitMQ metrics reacting to live traffic.
+
+<p align="center">
+  <img src="frontend/public/mediaflow-observability.gif" alt="MediaFlow AI observability: Grafana, Prometheus and RabbitMQ" width="900" />
+</p>
 
 ## Architecture
 
@@ -64,21 +141,26 @@ Services communicate through HTTP and asynchronous messaging where appropriate. 
 
 ## Observability
 
-MediaFlow AI includes a Prometheus and Grafana monitoring stack.
+MediaFlow AI includes a Prometheus and Grafana monitoring stack. Current instrumentation covers the API Gateway, Python worker, and RabbitMQ.
 
-Current instrumentation covers the API Gateway, Python worker, and RabbitMQ.
-
-- **Gateway:** HTTP request metrics and application metrics.
-- **Worker:** job-processing metrics and retry-related metrics.
-- **RabbitMQ:** broker metrics exposed through its Prometheus plugin.
-- **Prometheus:** periodic scraping of configured targets.
-- **Grafana:** dashboards for inspecting application and infrastructure behavior.
+| Source         | What is measured                                       |
+| -------------- | ------------------------------------------------------ |
+| **Gateway**    | HTTP request metrics and application metrics           |
+| **Worker**     | Job-processing metrics and retry-related metrics       |
+| **RabbitMQ**   | Broker metrics exposed through its Prometheus plugin   |
+| **Prometheus** | Periodic scraping of configured targets                |
+| **Grafana**    | Dashboards for application and infrastructure behavior |
 
 This setup helps investigate service availability, request activity, processing behavior, and messaging health.
 
 ## Testing
 
 The project includes automated unit tests for important gateway and worker behavior.
+
+| Suite       | Tests | Covers                                                 |
+| ----------- | :---: | ------------------------------------------------------ |
+| API Gateway |  23   | Authentication, metrics, and media-proxy behavior      |
+| Worker      |  36   | Validation, retry behavior, pipeline, message consumer |
 
 ### API Gateway
 
@@ -90,8 +172,6 @@ npm ci
 npm test
 npm run build
 ```
-
-The gateway test suite currently contains 23 tests covering authentication, metrics, and media-proxy behavior.
 
 ### Python Worker
 
@@ -113,9 +193,7 @@ $env:OPENAI_API_KEY = "test"
 python -m pytest .\services\worker\test -v
 ```
 
-The worker test suite currently contains 36 tests covering validation, retry behavior, pipeline execution, and message-consumer behavior.
-
-The environment values above are placeholders for local test execution. They are not production credentials.
+> The environment values above are placeholders for local test execution. They are not production credentials.
 
 ## Local development
 
@@ -128,7 +206,7 @@ The local Compose configuration exposes the following endpoints:
 | Prometheus  | `http://localhost:9090` |
 | Grafana     | `http://localhost:3001` |
 
-Grafana listens on port `3000` inside its container and is published on host port `3001` to avoid conflicting with the API Gateway.
+> Grafana listens on port `3000` inside its container and is published on host port `3001` to avoid conflicting with the API Gateway. If a container fails to start, check the Compose port mappings for conflicts.
 
 ### Prerequisites
 
@@ -141,39 +219,37 @@ Grafana listens on port `3000` inside its container and is published on host por
 
 Create or configure the root `.env` file using the variables referenced by `infra/compose/docker-compose.local.yml`.
 
-Provide the appropriate database, authentication, RabbitMQ, AWS, and frontend demo configuration for your environment. Never commit real credentials or production secrets.
+Provide the appropriate database, authentication, RabbitMQ, AWS, and frontend demo configuration for your environment. **Never commit real credentials or production secrets.**
 
-### Start the local environment
+### Commands
 
-From the repository root:
+All commands run from the repository root.
 
 ```powershell
+# Start the local environment
 docker compose --env-file .\.env -f .\infra\compose\docker-compose.local.yml up -d --build
-```
 
-Check the running services:
-
-```powershell
+# Check the running services
 docker compose --env-file .\.env -f .\infra\compose\docker-compose.local.yml ps
-```
 
-Inspect logs:
-
-```powershell
+# Follow the logs
 docker compose --env-file .\.env -f .\infra\compose\docker-compose.local.yml logs -f
-```
 
-Stop the local environment:
-
-```powershell
+# Stop the local environment
 docker compose --env-file .\.env -f .\infra\compose\docker-compose.local.yml down
 ```
 
-The local Compose configuration publishes the frontend on port `8080`, the gateway on port `3000`, Prometheus on port `9090`, and Grafana on port `3000` as configured by the local monitoring setup. Check the Compose port mappings before opening services, since port conflicts can prevent containers from starting.
-
 ## CI/CD
 
-GitHub Actions provides an automated pipeline triggered by pushes to `main`.
+GitHub Actions provides an automated pipeline triggered by pushes to `main`:
+
+```mermaid
+flowchart LR
+    A[Push to main] --> B[Validate]
+    B --> C[Build Docker images]
+    C --> D[Publish to GHCR]
+    D --> E[Deploy to production server]
+```
 
 The pipeline validates application components, builds and publishes Docker images to GitHub Container Registry (GHCR), and deploys the resulting images to the production server after validation and publication succeed.
 
@@ -203,3 +279,9 @@ MediaFlow AI demonstrates practical work with:
 - CI/CD with GitHub Actions and GHCR
 - Metrics collection and dashboards with Prometheus and Grafana
 - Automated testing and production operations
+
+---
+
+<div align="center">
+  <sub>Built with TypeScript, Python, and RabbitMQ.</sub>
+</div>

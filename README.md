@@ -6,8 +6,8 @@
 
 **Distributed, asynchronous media processing — observable from end to end.**
 
-A media-processing platform built with TypeScript, Python, and RabbitMQ, featuring a web interface,
-service-based architecture, automated validation, and production observability.
+Turn audio, video, and YouTube links into transcripts, summaries, and keywords. Built with TypeScript, Python, and RabbitMQ,
+and running in production on a VPS I provisioned, hardened, and deploy to myself.
 
 <br />
 
@@ -15,24 +15,30 @@ service-based architecture, automated validation, and production observability.
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=for-the-badge&logo=socketdotio&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/Neon_PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![AWS S3](https://img.shields.io/badge/AWS_S3-569A31?style=for-the-badge&logo=amazons3&logoColor=white)
-![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)
 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![DigitalOcean](https://img.shields.io/badge/DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean&logoColor=white)
+![Let's Encrypt](https://img.shields.io/badge/Let's_Encrypt-003A70?style=for-the-badge&logo=letsencrypt&logoColor=white)
+
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
 ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
 ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
 
 <br />
 
+![Live](https://img.shields.io/badge/live-mediaflow.emersonic.dev-brightgreen)
 ![Gateway tests](https://img.shields.io/badge/gateway_tests-23_passing-brightgreen)
 ![Worker tests](https://img.shields.io/badge/worker_tests-36_passing-brightgreen)
 
-[Preview](#preview) · [Architecture](#architecture) · [Observability](#observability) · [Testing](#testing) · [Local development](#local-development) · [CI/CD](#cicd)
+[Live demo](https://mediaflow.emersonic.dev) · [Preview](#preview) · [Architecture](#architecture) · [Design decisions](#key-design-decisions) · [Production](#production-deployment) · [Observability](#observability) · [Testing](#testing) · [Local development](#local-development)
 
 </div>
 
@@ -43,29 +49,25 @@ service-based architecture, automated validation, and production observability.
 - [Overview](#overview)
 - [Preview](#preview)
 - [Architecture](#architecture)
+- [Key design decisions](#key-design-decisions)
+- [Production deployment](#production-deployment)
 - [Observability](#observability)
 - [Testing](#testing)
 - [Local development](#local-development)
-- [CI/CD](#cicd)
-- [Security considerations](#security-considerations)
+- [Known limitations](#known-limitations)
 - [Engineering focus](#engineering-focus)
 
 ## Overview
 
-MediaFlow AI provides an asynchronous processing workflow for media files. Users submit media through a web interface, the platform publishes jobs to RabbitMQ, a Python worker processes them independently of incoming requests, and clients receive real-time notifications as work progresses.
+MediaFlow AI is an asynchronous processing platform for media files. Users upload audio or video (up to about 500 MB) or submit a YouTube link through a web interface. The platform publishes a job to RabbitMQ, a Python worker processes it independently of incoming requests, and the browser receives live progress as the work advances.
 
-The project focuses on backend engineering, asynchronous messaging, containerization, CI/CD, and operational monitoring.
+Each job produces a timestamped transcript, a summary, and keywords, with in-browser playback of the original media.
+
+The project is built the way a production system would be: heavy work never blocks a request, failures are retried instead of lost, every release is traceable to a commit, and a failed deploy rolls itself back.
 
 ## Preview
 
-<!--
-  GIF tips:
-  - Keep each recording under ~15-20 seconds and ~8 MB.
-  - Record at ~1280px wide and export at 800-900px.
-  - Save them in docs/assets/ with the file names used below.
--->
-
-### 🎬 Upload to result, in real time
+### Upload to result, in real time
 
 Submit a media file, watch the job move through the pipeline, and receive the live notification when processing completes.
 
@@ -73,7 +75,7 @@ Submit a media file, watch the job move through the pipeline, and receive the li
   <img src="frontend/public/mediaflow-demo.gif" alt="MediaFlow AI: upload, processing, and real-time notification" width="900" />
 </p>
 
-### 📈 Observability stack
+### Observability stack
 
 Grafana dashboards, Prometheus targets, and RabbitMQ metrics reacting to live traffic.
 
@@ -124,38 +126,107 @@ flowchart TD
 
 ### Core services
 
-| Component      | Technology             | Responsibility                                                |
-| -------------- | ---------------------- | ------------------------------------------------------------- |
-| Frontend       | Web application, Nginx | User interface and API access                                 |
-| API Gateway    | NestJS, TypeScript     | API entry point, authentication, request routing, and metrics |
-| Ingestion      | Node.js, TypeScript    | Media ingestion and asynchronous job publishing               |
-| Notification   | Node.js, Socket.IO     | Real-time client notifications                                |
-| Worker         | Python, asyncio        | Asynchronous media-processing pipeline                        |
-| Message broker | RabbitMQ               | Job distribution, retries, and dead-letter handling           |
-| Database       | Neon PostgreSQL        | Persistent application data                                   |
-| Object storage | AWS S3                 | Media and object storage                                      |
-| Metrics        | Prometheus             | Metrics collection                                            |
-| Dashboards     | Grafana                | Operational visualization                                     |
+| Component      | Technology                   | Responsibility                                                |
+| -------------- | ---------------------------- | ------------------------------------------------------------- |
+| Frontend       | React, Vite, Tailwind, Nginx | User interface, API and WebSocket reverse proxy               |
+| API Gateway    | NestJS, TypeScript           | API entry point, authentication, request routing, and metrics |
+| Ingestion      | Node.js, TypeScript          | Media registration and asynchronous job publishing            |
+| Notification   | Node.js, Socket.IO           | Real-time client notifications                                |
+| Worker         | Python, asyncio, FFmpeg      | Audio extraction, transcription, summary, and keywords        |
+| Message broker | RabbitMQ                     | Job distribution, retries, and dead-letter handling           |
+| Database       | Neon PostgreSQL              | Persistent application data                                   |
+| Object storage | AWS S3                       | Media and object storage                                      |
+| Metrics        | Prometheus                   | Metrics collection                                            |
+| Dashboards     | Grafana                      | Operational visualization                                     |
 
-Services communicate through HTTP and asynchronous messaging where appropriate. RabbitMQ decouples job submission from processing, allowing workers to process jobs independently of incoming requests.
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as API (gateway + ingestion)
+    participant S as AWS S3
+    participant R as RabbitMQ
+    participant W as Python worker
+    participant N as Notification service
+
+    B->>A: Request upload URL
+    A-->>B: Presigned URL
+    B->>S: Upload file directly (up to ~500 MB)
+    B->>A: Register media
+    A->>R: Publish media.uploaded
+    A-->>B: Accepted (responds immediately)
+    R->>W: Deliver job
+    W->>S: Read media
+    loop Pipeline stages
+        W->>R: Publish progress event
+        R->>N: Progress event
+        N-->>B: Live update (Socket.IO)
+    end
+```
+
+## Key design decisions
+
+**Direct-to-storage uploads.** The API never touches the file. It issues a presigned S3 URL, the browser uploads straight to storage, and the API only registers the media. Files of hundreds of megabytes don't consume the API's memory, bandwidth, or request time.
+
+**Decoupled by a message broker.** After an upload, the API publishes a `media.uploaded` event and responds immediately. The worker consumes jobs when it has capacity, so slow processing never blocks users. Failed jobs are retried and, when they keep failing, land in a dead-letter queue instead of disappearing. The worker is designed to tolerate redelivery, which makes retries safe.
+
+**The right runtime for each service.** NestJS for authentication and ingestion, Python for the processing pipeline (FFmpeg, transcription, summary, keywords), and a small Node service with Socket.IO for real-time delivery.
+
+**Live progress without polling.** The worker publishes progress events as it goes. The notification service relays each one to the browser over Socket.IO, so users watch the job advance instead of refreshing a page.
+
+**Immutable, traceable releases.** Every service is built into an image tagged with its commit SHA, never `latest`. Any release maps to a commit, and a rollback is a tag change.
+
+**One public entry point.** Nginx serves the frontend and reverse-proxies the API and WebSocket traffic under a single domain. It is the only service exposed to the internet.
+
+## Production deployment
+
+MediaFlow is live at [mediaflow.emersonic.dev](https://mediaflow.emersonic.dev), on a DigitalOcean VPS that I provisioned and hardened myself.
+
+```mermaid
+flowchart LR
+    A[Push to main] --> B[Gateway + worker tests]
+    B --> C[Build images, tagged by commit SHA]
+    C --> D[Publish to GHCR]
+    D --> E[SSH deploy to VPS]
+    E --> F{Healthchecks pass?}
+    F -->|yes| G[Live]
+    F -->|no| H[Roll back to previous image tag]
+```
+
+**Pipeline.** GitHub Actions runs the gateway and worker tests, builds the five service images, publishes them to GitHub Container Registry (GHCR), and deploys over SSH with Docker Compose. A failing test stops the pipeline before any image is built. If the new containers don't pass their healthchecks, the deploy rolls back to the previously running image tag.
+
+**Runtime.** Every service runs under Docker Compose with healthchecks, restart policies, resource limits, and internal networks. Only Nginx is exposed publicly.
+
+**Edge.** Nginx terminates TLS with Certbot certificates (auto-renewed), redirects HTTP to HTTPS, sends HSTS, and allows only TLS 1.2 and 1.3.
+
+**Server hardening.**
+
+- SSH key authentication only, root login disabled, non-default port
+- Firewall allowing only 80, 443, and SSH, plus fail2ban against brute force
+- Automatic security updates
+- Dedicated non-root deploy user
+- Secrets kept on the server, never in the repository
+
+The managed PostgreSQL database runs on Neon, and media lives in AWS S3.
 
 ## Observability
 
-MediaFlow AI includes a Prometheus and Grafana monitoring stack. Current instrumentation covers the API Gateway, Python worker, and RabbitMQ.
+MediaFlow AI includes a Prometheus and Grafana monitoring stack. Instrumentation covers the API Gateway, the Python worker, and RabbitMQ.
 
 | Source         | What is measured                                       |
 | -------------- | ------------------------------------------------------ |
 | **Gateway**    | HTTP request metrics and application metrics           |
 | **Worker**     | Job-processing metrics and retry-related metrics       |
-| **RabbitMQ**   | Broker metrics exposed through its Prometheus plugin   |
+| **RabbitMQ**   | Broker metrics, including queue depth                  |
 | **Prometheus** | Periodic scraping of configured targets                |
 | **Grafana**    | Dashboards for application and infrastructure behavior |
 
-This setup helps investigate service availability, request activity, processing behavior, and messaging health.
+A stuck pipeline shows up on a dashboard: queue depth grows while the worker's processing metrics flatten. Together with the container healthchecks, that covers service availability, request activity, processing behavior, and messaging health.
 
 ## Testing
 
-The project includes automated unit tests for important gateway and worker behavior.
+The project includes automated unit tests for important gateway and worker behavior. **They run in the CI pipeline on every push to `main`, and a failure blocks the build and the deploy.**
 
 | Suite       | Tests | Covers                                                 |
 | ----------- | :---: | ------------------------------------------------------ |
@@ -239,46 +310,26 @@ docker compose --env-file .\.env -f .\infra\compose\docker-compose.local.yml log
 docker compose --env-file .\.env -f .\infra\compose\docker-compose.local.yml down
 ```
 
-## CI/CD
+## Known limitations
 
-GitHub Actions provides an automated pipeline triggered by pushes to `main`:
-
-```mermaid
-flowchart LR
-    A[Push to main] --> B[Validate]
-    B --> C[Build Docker images]
-    C --> D[Publish to GHCR]
-    D --> E[Deploy to production server]
-```
-
-The pipeline validates application components, builds and publishes Docker images to GitHub Container Registry (GHCR), and deploys the resulting images to the production server after validation and publication succeed.
-
-Gateway and worker tests are being integrated into the validation job so that test failures prevent downstream publication and deployment.
-
-Production configuration and secrets are maintained separately from the repository. Never store production environment files, credentials, access tokens, or private keys in source control.
-
-## Security considerations
-
-- Keep environment files and credentials out of version control.
-- Use environment-specific configuration for local and production deployments.
-- Keep production secrets outside the repository.
-- Restrict access to infrastructure management interfaces.
-- Use HTTPS for public application access.
-- Avoid exposing internal service ports unnecessarily.
+- **Single VPS.** Production runs on one server with Docker Compose. That keeps operations simple and cheap, but there is no redundancy. Managed orchestration would be the next step for real scale.
+- **Rollback restores images, not data.** Changes to message formats and the database schema have to stay compatible with the previous release.
+- **External AI providers.** Transcription and summaries depend on third-party providers, so latency and cost follow theirs. A provider abstraction in front of them would make them swappable.
 
 ## Engineering focus
 
 MediaFlow AI demonstrates practical work with:
 
 - Distributed service architecture
-- Asynchronous job processing with RabbitMQ
-- Retry handling and dead-letter queues
-- REST APIs and real-time notifications
+- Asynchronous job processing with RabbitMQ, retries, and dead-letter queues
+- Direct-to-storage uploads with presigned URLs
+- REST APIs and real-time notifications over Socket.IO
 - Python and TypeScript services
-- Docker and Docker Compose
-- CI/CD with GitHub Actions and GHCR
+- Docker and Docker Compose with healthchecks and resource limits
+- CI/CD with GitHub Actions and GHCR: tests, commit-tagged images, automatic rollback
+- VPS provisioning and hardening, Nginx, and TLS with Certbot
 - Metrics collection and dashboards with Prometheus and Grafana
-- Automated testing and production operations
+- Automated testing in the delivery pipeline
 
 ---
 
